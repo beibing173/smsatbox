@@ -58,10 +58,10 @@ jobs:
         id: ver
         run: |
           chmod +x scripts/version.sh
-          ./scripts/version.sh validate
-          VERSION="$(./scripts/version.sh name)"
-          CODE="$(./scripts/version.sh code)"
-          TAG="$(./scripts/version.sh tag)"
+          bash scripts/version.sh validate
+          VERSION="$(bash scripts/version.sh name)"
+          CODE="$(bash scripts/version.sh code)"
+          TAG="$(bash scripts/version.sh tag)"
           echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
           echo "version_code=$CODE"   >> "$GITHUB_OUTPUT"
           echo "tag=$TAG"             >> "$GITHUB_OUTPUT"
@@ -141,7 +141,8 @@ jobs:
       - name: 写入版本号
         working-directory: android
         run: |
-          ../scripts/version.sh write-gradle .
+          chmod +x ../scripts/version.sh
+          bash ../scripts/version.sh write-gradle .
 
       - name: 生成签名密钥（保证升级可覆盖安装）
         working-directory: android
