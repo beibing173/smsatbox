@@ -9,8 +9,9 @@ venv/
 .ruff_cache/
 
 # ---- 运行数据 ----
+# 注意：只忽略真正存放运行数据的目录，不要写裸 "data/"
+# 否则会把 Android 的 app/src/main/java/.../data 包目录一起吃掉
 server/data/
-data/
 *.db
 *.db-wal
 *.db-shm
