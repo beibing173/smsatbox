@@ -15,17 +15,56 @@ import java.util.concurrent.TimeUnit
  *
  * 【架构要求】更新检查与下载**绝不经过 Server 中转**，
  * 客户端内嵌代码直接访问 GitHub，与云端中转平台完全解耦。
+ *
+ * 【关键设计】一个 Release 同时承载 APK 与 EXE，两端版本号各自独立。
+ * 因此不能用 Release 的 tag 当版本依据（tag 只是快照标识），
+ * 而是从**自己那个附件文件名**里解析版本：
+ *     smsatbox-android-1.2.0.apk  → 1.2.0
+ *     smsatbox-windows-1.0.5.exe  → 1.0.5
+ * 这样 Android 升级不会被 Windows 的版本号误导。
  */
 object UpdateChecker {
 
     private const val LATEST_RELEASE_URL =
         "https://api.github.com/repos/%s/%s/releases/latest"
 
+    /** 新命名：smsatbox-android-1.2.0.apk */
+    private val ANDROID_ASSET = Regex(
+        """^smsatbox-android-(?<ver>\d+\.\d+\.\d+)\.apk$""",
+        RegexOption.IGNORE_CASE
+    )
+
+    /** 兼容旧命名：smsatbox-v1.0.0.apk */
+    private val LEGACY_ASSET = Regex(
+        """^(?:smsatbox-v?(?<ver>\d+\.\d+\.\d+)|smsatbox)\.apk$""",
+        RegexOption.IGNORE_CASE
+    )
+
     private val client = OkHttpClient.Builder()
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .followRedirects(true)
         .build()
+
+    /** 从附件文件名解析版本号；解析不出返回 null */
+    fun versionFromAssetName(name: String?): String? {
+        if (name.isNullOrBlank()) return null
+        ANDROID_ASSET.find(name)?.let { return it.groupValues[1] }
+        LEGACY_ASSET.find(name)?.let { return it.groupValues[1] }
+        return null
+    }
+
+    /** 在资产里挑 Android 的 .apk（优先新命名且版本最高） */
+    private fun pickApkAsset(assets: List<ReleaseAsset>): ReleaseAsset? {
+        val preferred = assets
+            .filter { ANDROID_ASSET.matches(it.name) }
+            .maxByOrNull { parseVersion(versionFromAssetName(it.name) ?: "0")?.let { v ->
+                v[0] * 10000 + v[1] * 100 + v[2]
+            } ?: 0 }
+        if (preferred != null) return preferred
+
+        return assets.firstOrNull { it.name.endsWith(".apk", ignoreCase = true) }
+    }
 
     /** 查询最新 Release；无 Release 时返回 null */
     suspend fun fetchLatest(): ReleaseInfo? = withContext(Dispatchers.IO) {
@@ -58,9 +97,15 @@ object UpdateChecker {
                     )
                 }
             }
+
+            // ★ 版本依据 = APK 附件文件名里的版本，而不是 Release tag
+            val apk = pickApkAsset(assets)
+            val version = apk?.let { versionFromAssetName(it.name) }
+                ?: tag.removePrefix("v")
+
             ReleaseInfo(
                 tagName = tag,
-                version = tag.removePrefix("v"),
+                version = version,
                 body = o.optString("body"),
                 htmlUrl = o.optString("html_url"),
                 publishedAt = o.optString("published_at"),

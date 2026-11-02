@@ -4,30 +4,140 @@ using Microsoft.Win32;
 
 namespace SmsatBox.Desktop.Core;
 
-/// <summary>深色 / 浅色主题，切换即时生效并记忆到配置。</summary>
+/// <summary>主题模式：跟随系统 / 深色 / 浅色。</summary>
+public enum ThemeMode
+{
+    /// <summary>跟随 Windows 系统的应用主题（默认）。</summary>
+    System = 0,
+
+    /// <summary>强制深色。</summary>
+    Dark = 1,
+
+    /// <summary>强制浅色。</summary>
+    Light = 2,
+}
+
+/// <summary>
+/// 主题管理：三种模式（跟随系统 / 深色 / 浅色），切换即时生效并记忆到配置。
+///
+/// 【重要】本类**只修改本应用自己的资源**，绝不写入系统注册表，
+/// 不会改变用户的 Windows 外观设置。
+/// </summary>
 public static class ThemeManager
 {
-    /// <summary>主题切换后触发，供自绘控件刷新。</summary>
+    /// <summary>主题切换后触发，供自绘控件刷新。参数为当前实际生效的 "dark" / "light"。</summary>
     public static event Action<string>? ThemeChanged;
 
-    public static bool IsDark { get; private set; } = true;
+    /// <summary>用户选择的模式。</summary>
+    public static ThemeMode Mode { get; private set; } = ThemeMode.System;
 
+    /// <summary>当前实际生效的是否深色（由 Mode 与系统设置共同决定）。</summary>
+    public static bool IsDark { get; private set; }
+
+    /// <summary>当前实际生效的主题："dark" / "light"。</summary>
     public static string Current => IsDark ? "dark" : "light";
 
+    /// <summary>模式的中文名，供界面显示。</summary>
+    public static string ModeLabel => Mode switch
+    {
+        ThemeMode.Dark => "深色",
+        ThemeMode.Light => "浅色",
+        _ => "跟随系统",
+    };
+
+    /// <summary>应用主题。参数可为 "system" / "dark" / "light"（兼容旧的 "dark"/"light" 配置）。</summary>
     public static void Apply(string? theme)
     {
-        IsDark = !string.Equals(theme, "light", StringComparison.OrdinalIgnoreCase);
+        Mode = Parse(theme);
+        ApplyFromMode();
+    }
+
+    /// <summary>在三种模式间循环切换（跟随系统 → 深色 → 浅色 → 跟随系统）。</summary>
+    public static string Cycle()
+    {
+        Mode = Mode switch
+        {
+            ThemeMode.System => ThemeMode.Dark,
+            ThemeMode.Dark => ThemeMode.Light,
+            _ => ThemeMode.System,
+        };
+        ApplyFromMode();
+        return ModeLabel;
+    }
+
+    /// <summary>直接设置模式。</summary>
+    public static void SetMode(ThemeMode mode)
+    {
+        Mode = mode;
+        ApplyFromMode();
+    }
+
+    /// <summary>系统主题变化时调用（仅当 Mode == System 才真正改变外观）。</summary>
+    public static void OnSystemThemeChanged()
+    {
+        if (Mode == ThemeMode.System)
+        {
+            ApplyFromMode();
+        }
+    }
+
+    private static void ApplyFromMode()
+    {
+        IsDark = Mode switch
+        {
+            ThemeMode.Dark => true,
+            ThemeMode.Light => false,
+            _ => IsSystemDark(),
+        };
+
         ApplyToResources(IsDark);
         ThemeChanged?.Invoke(Current);
     }
 
-    public static string Toggle()
+    /// <summary>读取系统当前是否为深色应用模式。仅读取，不写入。</summary>
+    public static bool IsSystemDark()
     {
-        IsDark = !IsDark;
-        ApplyToResources(IsDark);
-        ThemeChanged?.Invoke(Current);
-        return Current;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                writable: false);   // 关键：只读打开，绝不写入
+
+            if (key?.GetValue("AppsUseLightTheme") is int light)
+            {
+                return light == 0;
+            }
+        }
+        catch
+        {
+            // 读不到就当作浅色
+        }
+
+        return false;
     }
+
+    private static ThemeMode Parse(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return ThemeMode.System;
+        }
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "dark" => ThemeMode.Dark,
+            "light" => ThemeMode.Light,
+            _ => ThemeMode.System,
+        };
+    }
+
+    /// <summary>把模式序列化成配置里存的值。</summary>
+    public static string SerializeMode(ThemeMode mode) => mode switch
+    {
+        ThemeMode.Dark => "dark",
+        ThemeMode.Light => "light",
+        _ => "system",
+    };
 
     private static void ApplyToResources(bool dark)
     {
@@ -43,23 +153,8 @@ public static class ThemeManager
             app.Resources[kv.Key] = kv.Value;
         }
 
-        // 系统主题色（标题栏 / 原生控件跟随）
-        try
-        {
-            SetAppsUseLightTheme(!dark);
-        }
-        catch
-        {
-            // 无权限或旧系统，忽略
-        }
-    }
-
-    /// <summary>写入 HKCU\...\Themes\Personalize\AppsUseLightTheme，让原生窗口边框跟随。</summary>
-    private static void SetAppsUseLightTheme(bool light)
-    {
-        using var key = Registry.CurrentUser.OpenSubKey(
-            @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", writable: true);
-        key?.SetValue("AppsUseLightTheme", light ? 1 : 0, RegistryValueKind.DWord);
+        // 注意：这里刻意不调用任何写注册表的方法。
+        // 本应用的配色只写在 App.Resources 里，系统外观保持用户原样。
     }
 
     /// <summary>调色板：key 与 App.xaml 中的 DynamicResource 名一致。</summary>

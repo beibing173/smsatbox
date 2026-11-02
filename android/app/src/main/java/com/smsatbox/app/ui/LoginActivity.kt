@@ -28,7 +28,6 @@ class LoginActivity : AppCompatActivity() {
     private val api = ApiClient()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        applyTheme()
         super.onCreate(savedInstanceState)
         binding = ActivityLoginBinding.inflate(layoutInflater)
         setContentView(binding.root)
@@ -97,14 +96,9 @@ class LoginActivity : AppCompatActivity() {
         binding.progressBar.visibility = if (loading) View.VISIBLE else View.GONE
     }
 
-    private fun applyTheme() {
-        if (Prefs.themeMode == "light") setTheme(R.style.Theme_SMSATBOX_Light)
-        else setTheme(R.style.Theme_SMSATBOX)
-    }
-
+    /** 状态栏图标明暗跟随当前实际生效的日夜模式。 */
     private fun applySystemBarStyle() {
-        val isLight = Prefs.themeMode == "light" ||
-                (Prefs.themeMode == "system" && isSystemLight())
+        val isLight = isLightThemeNow()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             window.insetsController?.let { c ->
                 val mask = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
@@ -118,7 +112,7 @@ class LoginActivity : AppCompatActivity() {
         }
     }
 
-    private fun isSystemLight(): Boolean {
+    private fun isLightThemeNow(): Boolean {
         val mode = resources.configuration.uiMode and
                 android.content.res.Configuration.UI_MODE_NIGHT_MASK
         return mode != android.content.res.Configuration.UI_MODE_NIGHT_YES

@@ -35,7 +35,11 @@ public static class ConfigStore
             var cfg = JsonSerializer.Deserialize<AppConfig>(json, Options) ?? new AppConfig();
             cfg.ServerUrl = (cfg.ServerUrl ?? "").Trim();
             cfg.Token = (cfg.Token ?? "").Trim();
-            cfg.Theme = string.Equals(cfg.Theme, "light", StringComparison.OrdinalIgnoreCase) ? "light" : "dark";
+
+            // 主题：只接受 system / dark / light；其他值（含历史遗留）回落到跟随系统
+            var theme = (cfg.Theme ?? "").Trim().ToLowerInvariant();
+            cfg.Theme = theme is "dark" or "light" ? theme : "system";
+
             cfg.PollSeconds = ClampPoll(cfg.PollSeconds);
             return cfg;
         }

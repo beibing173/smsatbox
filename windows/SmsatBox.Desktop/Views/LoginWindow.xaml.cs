@@ -21,6 +21,8 @@ public partial class LoginWindow : Window
         TokenTextBox.Text = config.Token;
         RememberCheckBox.IsChecked = true;
 
+        SyncThemeButton();
+
         Loaded += (_, _) =>
         {
             if (string.IsNullOrWhiteSpace(ServerTextBox.Text))
@@ -204,5 +206,36 @@ public partial class LoginWindow : Window
     {
         DialogResult = false;
         Close();
+    }
+
+    // ===== 主题 =====
+
+    /// <summary>按钮文案跟随当前模式。</summary>
+    private void SyncThemeButton()
+    {
+        ThemeButton.Content = ThemeManager.Mode switch
+        {
+            ThemeMode.Dark => "🌙 深色",
+            ThemeMode.Light => "☀ 浅色",
+            _ => "🖥 跟随系统",
+        };
+    }
+
+    /// <summary>点击在「跟随系统 → 深色 → 浅色」之间循环切换，并立即保存。</summary>
+    private void OnThemeButtonClick(object sender, RoutedEventArgs e)
+    {
+        ThemeManager.Cycle();
+        SyncThemeButton();
+
+        // 记住选择，下次启动沿用
+        _config.Theme = ThemeManager.SerializeMode(ThemeManager.Mode);
+        try
+        {
+            ConfigStore.Save(_config);
+        }
+        catch (Exception ex)
+        {
+            Log.Write("保存主题设置失败", ex);
+        }
     }
 }

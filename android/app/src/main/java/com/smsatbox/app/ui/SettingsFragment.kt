@@ -12,6 +12,8 @@ import androidx.lifecycle.lifecycleScope
 import com.smsatbox.app.BuildConfig
 import com.smsatbox.app.Prefs
 import com.smsatbox.app.R
+import com.smsatbox.app.ThemeApplier
+import com.smsatbox.app.ThemeMode
 import com.smsatbox.app.databinding.FragmentSettingsBinding
 import com.smsatbox.app.update.ApkInstaller
 import com.smsatbox.app.update.UpdateChecker
@@ -42,21 +44,27 @@ class SettingsFragment : Fragment() {
         binding.userValue.text = Prefs.userName.ifEmpty { "—" }
         binding.currentVersion.text = "v${BuildConfig.APP_VERSION}"
 
-        // 主题选择
+        // 主题选择（三档：跟随系统 / 深色 / 浅色）
         binding.themeGroup.check(
             when (Prefs.themeMode) {
-                "dark" -> R.id.theme_dark
-                "light" -> R.id.theme_light
+                ThemeMode.DARK -> R.id.theme_dark
+                ThemeMode.LIGHT -> R.id.theme_light
                 else -> R.id.theme_system
             }
         )
         binding.themeGroup.setOnCheckedChangeListener { _, checkedId ->
-            Prefs.themeMode = when (checkedId) {
-                R.id.theme_dark -> "dark"
-                R.id.theme_light -> "light"
-                else -> "system"
+            val mode = when (checkedId) {
+                R.id.theme_dark -> ThemeMode.DARK
+                R.id.theme_light -> ThemeMode.LIGHT
+                else -> ThemeMode.SYSTEM
             }
-            Toast.makeText(requireContext(), "主题已切换，重新进入生效", Toast.LENGTH_SHORT).show()
+            if (mode == Prefs.themeMode) return@setOnCheckedChangeListener
+            ThemeApplier.set(requireContext(), mode)
+            Toast.makeText(
+                requireContext(),
+                "主题：" + ThemeApplier.label(mode),
+                Toast.LENGTH_SHORT
+            ).show()
         }
 
         // 通知开关

@@ -3,31 +3,37 @@ name: Build & Release
 # ============================================================================
 #  SMSATBOX · 维度一：外部用户端发布（APK & EXE）
 # ----------------------------------------------------------------------------
-#  触发：
-#    - push 到 main/master
-#    - 手动触发（可选强制重建 Release）
-#    - push tag v*.*.*（版本号以 VERSION 文件为准）
+#  【版本模型】APK 与 EXE 各自独立版本号，但共用**同一个 Release**。
 #
-#  产物：GitHub Release 中的
-#    - smsatbox-v{version}.apk
-#    - smsatbox-v{version}.exe
+#    - 各端版本号来源：versions/android.txt、versions/windows.txt
+#    - Release tag：版本快照号（如 v2026.11.02-r1），只作为「这一次发布了什么」
+#      的统一标识，不代表任何一端的版本。
+#    - 产物命名带平台与版本：
+#        smsatbox-android-1.2.0.apk
+#        smsatbox-windows-1.0.5.exe
+#    - 客户端升级时只比对「自己那个文件名里的版本」，
+#      所以 Android 1.2.0 发布不会让 Windows 误以为自己要升级。
 #
-#  版本覆盖规则：同版本 Tag 覆盖原有附件，不同版本新建 Release。
-#
-#  ⚠️ 本流水线**不包含 ESP32 固件**，固件走 docker-build.yml 与 OTA 通道。
+#  【版本覆盖规则】同 tag 的 Release 已存在 → 覆盖附件；不存在 → 新建。
+#  【注意】ESP32 固件不参与本流水线。
 # ============================================================================
 
 on:
   push:
     branches: [main, master]
-    tags: ["v*.*.*"]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       force_recreate:
-        description: "强制重建 Release（即使同版本已存在）"
+        description: "强制重建 Release（即使同 tag 已存在）"
         required: false
         type: boolean
         default: false
+      snapshot_tag:
+        description: "自定义 Release tag（留空则自动生成日期快照号）"
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -38,36 +44,56 @@ concurrency:
 
 jobs:
   # ═══════════════════════════════════════════════════════════════
-  # 1. 读取版本号，决定发布策略
+  # 1. 读取各端版本号，决定 Release tag 与发布策略
   # ═══════════════════════════════════════════════════════════════
   prepare:
     name: 读取版本号
     runs-on: ubuntu-latest
     outputs:
-      version: ${{ steps.ver.outputs.version }}
-      version_code: ${{ steps.ver.outputs.version_code }}
+      android_version: ${{ steps.ver.outputs.android_version }}
+      android_code: ${{ steps.ver.outputs.android_code }}
+      windows_version: ${{ steps.ver.outputs.windows_version }}
+      server_version: ${{ steps.ver.outputs.server_version }}
       tag: ${{ steps.ver.outputs.tag }}
-      release_exists: ${{ steps.check.outputs.exists }}
       strategy: ${{ steps.decide.outputs.strategy }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: 读取版本号
+      - name: 读取三端版本号
         id: ver
         run: |
           chmod +x scripts/version.sh
-          bash scripts/version.sh validate
-          VERSION="$(bash scripts/version.sh name)"
-          CODE="$(bash scripts/version.sh code)"
-          TAG="$(bash scripts/version.sh tag)"
-          echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
-          echo "version_code=$CODE"   >> "$GITHUB_OUTPUT"
-          echo "tag=$TAG"             >> "$GITHUB_OUTPUT"
-          echo "版本: $VERSION (code=$CODE, tag=$TAG)"
+          bash scripts/version.sh validate-all
 
-      - name: 检查该版本 Release 是否已存在
+          AV="$(bash scripts/version.sh android name)"
+          AC="$(bash scripts/version.sh android code)"
+          WV="$(bash scripts/version.sh windows name)"
+          SV="$(bash scripts/version.sh server name)"
+
+          # tag 取手动输入 > push 的 tag > 自动快照号
+          CUSTOM="${{ github.event.inputs.snapshot_tag }}"
+          if [ -n "$CUSTOM" ]; then
+            TAG="$CUSTOM"
+          elif [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="v$(bash scripts/version.sh snapshot)"
+          fi
+
+          echo "android_version=$AV" >> "$GITHUB_OUTPUT"
+          echo "android_code=$AC"    >> "$GITHUB_OUTPUT"
+          echo "windows_version=$WV" >> "$GITHUB_OUTPUT"
+          echo "server_version=$SV"  >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"            >> "$GITHUB_OUTPUT"
+
+          echo "Android : v$AC ($AV)"
+          echo "Windows : $WV"
+          echo "Server  : $SV"
+          echo "Release tag : $TAG"
+
+      - name: 检查该 tag 的 Release 是否已存在
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -75,7 +101,7 @@ jobs:
           TAG="${{ steps.ver.outputs.tag }}"
           if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
-            echo "::notice::Release $TAG 已存在，将覆盖上传"
+            echo "::notice::Release $TAG 已存在，将覆盖附件"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
             echo "::notice::Release $TAG 不存在，将新建"
@@ -84,24 +110,16 @@ jobs:
       - name: 决定发布策略
         id: decide
         run: |
-          FORCE="${{ github.event.inputs.force_recreate }}"
-          # 同版本已存在 → overwrite（覆盖附件，更新说明）
-          # 同版本不存在 → create（新建 Release）
-          if [ "${{ steps.check.outputs.exists }}" = "true" ] || [ "$FORCE" = "true" ]; then
-            if [ "${{ steps.check.outputs.exists }}" = "true" ]; then
-              echo "strategy=overwrite" >> "$GITHUB_OUTPUT"
-              echo "::notice::策略: 覆盖 v${{ steps.ver.outputs.version }}"
-            else
-              echo "strategy=create" >> "$GITHUB_OUTPUT"
-              echo "::notice::策略: 新建 v${{ steps.ver.outputs.version }}"
-            fi
+          if [ "${{ steps.check.outputs.exists }}" = "true" ]; then
+            echo "strategy=overwrite" >> "$GITHUB_OUTPUT"
+            echo "::notice::策略: 覆盖 ${{ steps.ver.outputs.tag }}"
           else
             echo "strategy=create" >> "$GITHUB_OUTPUT"
-            echo "::notice::策略: 新建 v${{ steps.ver.outputs.version }}"
+            echo "::notice::策略: 新建 ${{ steps.ver.outputs.tag }}"
           fi
 
   # ═══════════════════════════════════════════════════════════════
-  # 2. 构建 Android APK（在 Runner 上打包，不在本地打包）
+  # 2. 构建 Android APK
   # ═══════════════════════════════════════════════════════════════
   build-apk:
     name: 构建 APK
@@ -116,9 +134,6 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # 说明：不使用 android-actions/setup-android，
-      # 新版 sdkmanager 已移除 `tools` 包，会导致 "Failed to find package 'tools'"。
-      # ubuntu-latest runner 已预装完整 Android SDK，这里只补齐所需组件。
       - name: 准备 Android SDK
         run: |
           SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
@@ -126,25 +141,19 @@ jobs:
           echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
 
           SDKMGR="$(ls -1 "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -n1)"
-          if [ -z "$SDKMGR" ]; then
-            echo "::warning::未找到 sdkmanager，依赖 runner 预装的 SDK"
-          else
-            echo "sdkmanager: $SDKMGR"
+          if [ -n "$SDKMGR" ]; then
             yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
             "$SDKMGR" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || \
-              echo "::warning::SDK 组件安装有警告，继续尝试构建"
+              echo "::warning::SDK 组件安装有警告，继续构建"
           fi
+          ls "$SDK/platforms" 2>/dev/null || true
 
-          echo "已安装平台："; ls "$SDK/platforms" 2>/dev/null || true
-          echo "已安装 build-tools："; ls "$SDK/build-tools" 2>/dev/null || true
-
-      - name: 写入版本号
-        working-directory: android
+      - name: 同步版本号到源码
         run: |
-          chmod +x ../scripts/version.sh
-          bash ../scripts/version.sh write-gradle .
+          chmod +x scripts/version.sh
+          bash scripts/version.sh sync
 
-      - name: 生成签名密钥（保证升级可覆盖安装）
+      - name: 生成签名密钥
         working-directory: android
         run: |
           mkdir -p keystore
@@ -152,12 +161,8 @@ jobs:
             keytool -genkeypair \
               -keystore keystore/smsatbox.jks \
               -storetype JKS \
-              -storepass smsatbox \
-              -keypass smsatbox \
-              -alias smsatbox \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 36500 \
+              -storepass smsatbox -keypass smsatbox \
+              -alias smsatbox -keyalg RSA -keysize 2048 -validity 36500 \
               -dname "CN=SMSATBOX, OU=Dev, O=beibing173, L=Unknown, ST=Unknown, C=CN"
           fi
 
@@ -168,30 +173,23 @@ jobs:
             ~/.gradle/caches
             ~/.gradle/wrapper
           key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*') }}
-          restore-keys: |
-            gradle-${{ runner.os }}-
+          restore-keys: gradle-${{ runner.os }}-
 
       - name: 构建 Release APK
         working-directory: android
         run: |
-          # 不依赖 gradle wrapper，直接安装 Gradle，避免仓库内 jar 版本问题
           wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip -O /tmp/gradle.zip
           unzip -q /tmp/gradle.zip -d /opt
           export PATH="/opt/gradle-8.9/bin:$PATH"
-          gradle --version
           gradle :app:assembleRelease --no-daemon --stacktrace
 
-      - name: 定位并重命名 APK
+      - name: 重命名 APK（含平台与版本）
         id: apk
         run: |
           APK="$(find android/app/build/outputs/apk/release -name '*.apk' | head -n1)"
-          if [ -z "$APK" ]; then
-            echo "::error::未找到 APK 产物"
-            ls -R android/app/build/outputs || true
-            exit 1
-          fi
+          [ -n "$APK" ] || { echo "::error::未找到 APK 产物"; ls -R android/app/build/outputs; exit 1; }
           mkdir -p dist
-          OUT="dist/smsatbox-v${{ needs.prepare.outputs.version }}.apk"
+          OUT="dist/smsatbox-android-${{ needs.prepare.outputs.android_version }}.apk"
           cp "$APK" "$OUT"
           echo "path=$OUT" >> "$GITHUB_OUTPUT"
           ls -lh "$OUT"
@@ -204,7 +202,7 @@ jobs:
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════════
-  # 3. 构建 Windows EXE（在 Runner 上打包）
+  # 3. 构建 Windows EXE
   # ═══════════════════════════════════════════════════════════════
   build-exe:
     name: 构建 EXE
@@ -218,18 +216,22 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: 同步版本号到源码
+        shell: bash
+        run: |
+          chmod +x scripts/version.sh
+          bash scripts/version.sh sync
+
       - name: 构建单文件 EXE
         shell: pwsh
         working-directory: windows
         run: |
-          $version = "${{ needs.prepare.outputs.version }}"
-          Write-Host "构建版本: $version"
+          $version = "${{ needs.prepare.outputs.windows_version }}"
+          Write-Host "Windows 版本: $version"
 
           dotnet restore SmsatBox.sln
           dotnet publish SmsatBox.Desktop/SmsatBox.Desktop.csproj `
-            -c Release `
-            -r win-x64 `
-            --self-contained true `
+            -c Release -r win-x64 --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:EnableCompressionInSingleFile=true `
@@ -239,24 +241,22 @@ jobs:
             -o ../dist/exe
 
           if (-not (Test-Path "../dist/exe/SmsatBox.exe")) {
-            Write-Error "未找到 EXE 产物"
-            Get-ChildItem -Recurse ../dist | Select-Object FullName
-            exit 1
+            Write-Error "未找到 EXE 产物"; Get-ChildItem -Recurse ../dist; exit 1
           }
 
-      - name: 重命名并校验
+      - name: 重命名 EXE（含平台与版本）
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "dist/exe/SmsatBox.exe" "dist/smsatbox-v${{ needs.prepare.outputs.version }}.exe"
-          Get-Item "dist/smsatbox-v${{ needs.prepare.outputs.version }}.exe" |
-            Select-Object Name, @{N='SizeMB';E={[math]::Round($_.Length/1MB,2)}}
+          $out = "dist/smsatbox-windows-${{ needs.prepare.outputs.windows_version }}.exe"
+          Copy-Item "dist/exe/SmsatBox.exe" $out
+          Get-Item $out | Select-Object Name, @{N='SizeMB';E={[math]::Round($_.Length/1MB,2)}}
 
       - name: 上传 EXE 产物
         uses: actions/upload-artifact@v4
         with:
           name: exe
-          path: dist/smsatbox-v${{ needs.prepare.outputs.version }}.exe
+          path: dist/smsatbox-windows-${{ needs.prepare.outputs.windows_version }}.exe
           retention-days: 7
 
   # ═══════════════════════════════════════════════════════════════
@@ -280,8 +280,7 @@ jobs:
       - name: 整理产物
         run: |
           mkdir -p release-assets
-          find artifacts -type f \( -name '*.apk' -o -name '*.exe' \) \
-            -exec cp {} release-assets/ \;
+          find artifacts -type f \( -name '*.apk' -o -name '*.exe' \) -exec cp {} release-assets/ \;
           echo "=== 待发布文件 ==="
           ls -lh release-assets/
 
@@ -293,8 +292,10 @@ jobs:
 
       - name: 生成 Release 说明
         env:
-          VERSION: ${{ needs.prepare.outputs.version }}
-          VERSION_CODE: ${{ needs.prepare.outputs.version_code }}
+          AV: ${{ needs.prepare.outputs.android_version }}
+          AC: ${{ needs.prepare.outputs.android_code }}
+          WV: ${{ needs.prepare.outputs.windows_version }}
+          SV: ${{ needs.prepare.outputs.server_version }}
           TAG: ${{ needs.prepare.outputs.tag }}
           REPO: ${{ github.repository }}
         run: |
@@ -302,8 +303,7 @@ jobs:
 
           PREV="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo '')"
           if [ -n "$PREV" ]; then
-            COMPARE="https://github.com/${REPO}/compare/${PREV}...${TAG}"
-            PREV_LINE="对比上次发布：[${PREV} → ${TAG}](${COMPARE})"
+            PREV_LINE="对比上次发布：[${PREV} → ${TAG}](https://github.com/${REPO}/compare/${PREV}...${TAG})"
             LOG_RANGE="${PREV}..HEAD"
           else
             PREV_LINE="首次发布"
@@ -311,15 +311,23 @@ jobs:
           fi
 
           {
-            echo "## SMSATBOX v${VERSION}"
+            echo "## SMSATBOX 发布 $TAG"
             echo ""
-            echo "\`versionName\` **${VERSION}** · \`versionCode\` **${VERSION_CODE}**"
+            echo "### 各端版本"
+            echo ""
+            echo "| 端 | 版本 | 说明 |"
+            echo "| --- | --- | --- |"
+            echo "| 📱 **Android** | \`${AV}\` (code ${AC}) | 独立版本号 |"
+            echo "| 🖥️ **Windows** | \`${WV}\` | 独立版本号 |"
+            echo "| ☁️ **Server** | \`${SV}\` | 独立发布，走 Docker Hub |"
+            echo ""
+            echo "> APK 与 EXE 版本号各自独立演进，共用一个 Release 归档。"
+            echo "> 客户端升级时只比对**自己那个安装包文件名里的版本**，互不干扰。"
             echo ""
             echo "${PREV_LINE}"
             echo ""
             echo "### 本次变更"
             echo ""
-            # 转义 @ 避免被 GitHub 误渲染成用户提及
             git log ${LOG_RANGE} --pretty=format:"- %s (%h)" --no-merges | head -n 40 | sed 's/@/＠/g' || true
             echo ""
             echo ""
@@ -329,10 +337,10 @@ jobs:
             echo ""
             echo "| 平台 | 文件 | 说明 |"
             echo "| --- | --- | --- |"
-            echo "| 📱 **Android** | [smsatbox-v${VERSION}.apk](${base}/smsatbox-v${VERSION}.apk) | 手机装这个 |"
-            echo "| 🖥️ **Windows** | [smsatbox-v${VERSION}.exe](${base}/smsatbox-v${VERSION}.exe) | 单文件，双击即用 |"
+            echo "| 📱 **Android** | [smsatbox-android-${AV}.apk](${base}/smsatbox-android-${AV}.apk) | 手机装这个 |"
+            echo "| 🖥️ **Windows** | [smsatbox-windows-${WV}.exe](${base}/smsatbox-windows-${WV}.exe) | 单文件，双击即用 |"
             echo ""
-            echo "> 两端均内嵌独立升级：启动后在「设置」中检查更新，"
+            echo "> 两端启动后可在「设置 → 检查更新」独立升级，"
             echo "> 直连 GitHub Release API 下载，**不经过 Server 中转**。"
             echo ""
             echo "---"
@@ -356,7 +364,6 @@ jobs:
             echo "</details>"
           } > RELEASE_BODY.md
 
-          echo "=== Release 说明 ==="
           cat RELEASE_BODY.md
 
       - name: 新建 Release
@@ -366,7 +373,7 @@ jobs:
         run: |
           gh release create "${{ needs.prepare.outputs.tag }}" \
             --repo "${{ github.repository }}" \
-            --title "SMSATBOX v${{ needs.prepare.outputs.version }}" \
+            --title "SMSATBOX ${{ needs.prepare.outputs.tag }}" \
             --notes-file RELEASE_BODY.md \
             --latest \
             release-assets/*
@@ -377,7 +384,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
-          # 先删旧资产，避免同名冲突
           gh release view "$TAG" --repo "${{ github.repository }}" --json assets \
             -q '.assets[].name' | while read -r name; do
               [ -n "$name" ] && gh release delete-asset "$TAG" "$name" \
@@ -385,7 +391,7 @@ jobs:
             done
           gh release edit "$TAG" \
             --repo "${{ github.repository }}" \
-            --title "SMSATBOX v${{ needs.prepare.outputs.version }}" \
+            --title "SMSATBOX $TAG" \
             --notes-file RELEASE_BODY.md \
             --latest
           gh release upload "$TAG" release-assets/* \
@@ -397,12 +403,13 @@ jobs:
         run: |
           TAG="${{ needs.prepare.outputs.tag }}"
           URL="$(gh release view "$TAG" --repo "${{ github.repository }}" --json url -q .url)"
-          echo "::notice::Release 已发布: $URL"
           {
             echo "### Release 已发布"
             echo ""
-            echo "**版本**: v${{ needs.prepare.outputs.version }} (code ${{ needs.prepare.outputs.version_code }})"
-            echo "**策略**: ${{ needs.prepare.outputs.strategy }}"
+            echo "- Android: \`${{ needs.prepare.outputs.android_version }}\`"
+            echo "- Windows: \`${{ needs.prepare.outputs.windows_version }}\`"
+            echo "- Server:  \`${{ needs.prepare.outputs.server_version }}\`"
+            echo "- 策略: ${{ needs.prepare.outputs.strategy }}"
             echo ""
             echo "**地址**: $URL"
           } >> "$GITHUB_STEP_SUMMARY"

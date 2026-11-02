@@ -1,27 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 浅色主题覆盖 -->
-    <color name="bg_0">#F4F7FB</color>
-    <color name="bg_1">#FFFFFF</color>
-    <color name="surface">#FFFFFF</color>
-    <color name="surface_2">#F4F7FB</color>
-    <color name="line">#D8E0EC</color>
-    <color name="line_soft">#E7EDF5</color>
+    <!--
+      深色主题（系统夜间模式下自动选用）
+      与 values/colors.xml 一一对应，只是配色不同。
+    -->
+    <color name="bg_0">#070B14</color>
+    <color name="bg_1">#0B111D</color>
+    <color name="surface">#0D1626</color>
+    <color name="surface_2">#131E2E</color>
+    <color name="line">#1E2B40</color>
+    <color name="line_soft">#172235</color>
 
-    <color name="text_0">#10192B</color>
-    <color name="text_1">#4A5A72</color>
-    <color name="text_2">#8394A8</color>
+    <color name="text_0">#E8F0FF</color>
+    <color name="text_1">#9FB0C9</color>
+    <color name="text_2">#64748B</color>
 
-    <color name="brand">#0891B2</color>
-    <color name="brand_2">#4F46E5</color>
-    <color name="ok">#10B981</color>
-    <color name="warn">#B45309</color>
-    <color name="danger">#DC2626</color>
+    <color name="brand">#22D3EE</color>
+    <color name="brand_2">#6366F1</color>
+    <color name="ok">#34D399</color>
+    <color name="warn">#FBBF24</color>
+    <color name="danger">#F87171</color>
 
-    <color name="code_bg">#E3F7FB</color>
-    <color name="code_line">#7FCBDC</color>
-    <color name="code_text">#0B6F86</color>
+    <color name="code_bg">#07222C</color>
+    <color name="code_line">#16808F</color>
+    <color name="code_text">#7FF0FF</color>
 
-    <color name="nav_unselected">#8394A8</color>
-    <color name="nav_selected">#0891B2</color>
+    <color name="nav_unselected">#64748B</color>
+    <color name="nav_selected">#22D3EE</color>
 </resources>

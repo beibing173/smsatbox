@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.Http;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 
 namespace SmsatBox.Desktop.Core;
 
@@ -69,12 +70,26 @@ public sealed class UpdateCheckResult
 
 /// <summary>
 /// 独立升级：直接查 GitHub Release API，绝不经过 SMSATBOX Server。
-/// GET https://api.github.com/repos/beibing173/smsatbox/releases/latest
-/// header: Accept: application/vnd.github+json, User-Agent
-/// 在 assets 里找 .exe 资产，比较 tag_name（去 v 前缀）与本地版本。
+///
+/// 【关键设计】一个 Release 同时承载 APK 与 EXE，两端的版本号各自独立。
+/// 因此**不能**用 Release 的 tag 作为版本依据（tag 只是快照标识），
+/// 而是从**自己那个附件文件名**里解析版本：
+///     smsatbox-windows-1.0.5.exe   → 1.0.5
+///     smsatbox-android-1.2.0.apk   → 1.2.0
+/// 这样 Windows 升级不会被 Android 的版本号误导，反之亦然。
 /// </summary>
 public static class UpdateService
 {
+    /// <summary>Windows 端产物文件名模式。</summary>
+    private static readonly Regex WindowsAssetPattern = new(
+        @"^smsatbox-windows-(?<ver>\d+\.\d+\.\d+)\.exe$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>兼容旧的命名：smsatbox-v1.0.0.exe / SmsatBox.exe。</summary>
+    private static readonly Regex LegacyAssetPattern = new(
+        @"^(?:smsatbox-v?(?<ver>\d+\.\d+\.\d+)|smsatbox)\.exe$",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
     private static readonly HttpClient Http;
 
     static UpdateService()
@@ -152,6 +167,51 @@ public static class UpdateService
         return new Version(nums[0], nums[1], nums[2], nums[3]);
     }
 
+    /// <summary>从附件文件名里解析 Windows 端版本号；解析不出返回 null。</summary>
+    public static string? VersionFromAssetName(string? assetName)
+    {
+        if (string.IsNullOrWhiteSpace(assetName))
+        {
+            return null;
+        }
+
+        var m = WindowsAssetPattern.Match(assetName);
+        if (m.Success && m.Groups["ver"].Success)
+        {
+            return m.Groups["ver"].Value;
+        }
+
+        var legacy = LegacyAssetPattern.Match(assetName);
+        if (legacy.Success && legacy.Groups["ver"].Success)
+        {
+            return legacy.Groups["ver"].Value;
+        }
+
+        return null;
+    }
+
+    /// <summary>在资产列表里挑出属于 Windows 端的 .exe（优先新命名）。</summary>
+    private static GitHubAsset? PickWindowsAsset(List<GitHubAsset>? assets)
+    {
+        if (assets is null || assets.Count == 0)
+        {
+            return null;
+        }
+
+        // 1) 新命名，且能解析出版本
+        var preferred = assets
+            .Where(a => WindowsAssetPattern.IsMatch(a.Name))
+            .OrderByDescending(a => ParseVersion(VersionFromAssetName(a.Name)) ?? new Version(0, 0))
+            .FirstOrDefault();
+        if (preferred is not null)
+        {
+            return preferred;
+        }
+
+        // 2) 兼容旧命名
+        return assets.FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+    }
+
     public static async Task<UpdateCheckResult> CheckAsync(CancellationToken ct = default)
     {
         try
@@ -187,10 +247,20 @@ public static class UpdateService
                 return new UpdateCheckResult { IsError = true, Message = "GitHub 返回内容无法解析" };
             }
 
-            var latest = NormalizeVersion(release.TagName);
-            var asset = release.Assets?
-                .FirstOrDefault(a => a.Name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase));
+            var asset = PickWindowsAsset(release.Assets);
+            if (asset is null)
+            {
+                // 这个 Release 里没有 Windows 产物（可能只发了 Android 侧）
+                return new UpdateCheckResult
+                {
+                    HasUpdate = false,
+                    Message = "当前 Release 未包含 Windows 安装包",
+                    ReleaseUrl = release.HtmlUrl,
+                };
+            }
 
+            // ★ 版本依据 = 附件文件名里的版本，而不是 Release tag
+            var latest = VersionFromAssetName(asset.Name) ?? NormalizeVersion(release.TagName);
             var newer = IsNewer(latest, AppInfo.Version);
 
             return new UpdateCheckResult
@@ -199,9 +269,9 @@ public static class UpdateService
                 LatestVersion = latest,
                 ReleaseNotes = release.Body,
                 ReleaseUrl = release.HtmlUrl,
-                DownloadUrl = asset?.BrowserDownloadUrl,
-                AssetName = asset?.Name,
-                AssetSize = asset?.Size ?? 0,
+                DownloadUrl = asset.BrowserDownloadUrl,
+                AssetName = asset.Name,
+                AssetSize = asset.Size,
                 Message = newer
                     ? $"发现新版本 v{latest}"
                     : $"已是最新版本 v{AppInfo.Version}",
@@ -228,14 +298,14 @@ public static class UpdateService
     {
         if (string.IsNullOrWhiteSpace(result.DownloadUrl))
         {
-            throw new InvalidOperationException("该 Release 没有 .exe 资产，无法自动升级");
+            throw new InvalidOperationException("该 Release 没有可用的 .exe 资产，无法自动升级");
         }
 
         var dir = Path.Combine(Path.GetTempPath(), "SMSATBOX-update");
         Directory.CreateDirectory(dir);
 
         // 清掉上次残留
-        foreach (var old in Directory.GetFiles(dir, "SmsatBox*.exe"))
+        foreach (var old in Directory.GetFiles(dir, "*.exe"))
         {
             try
             {

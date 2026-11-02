@@ -27,7 +27,6 @@ class MainActivity : AppCompatActivity() {
     private val settingsFragment by lazy { SettingsFragment() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        applyTheme()
         super.onCreate(savedInstanceState)
 
         binding = ActivityMainBinding.inflate(layoutInflater)
@@ -89,19 +88,10 @@ class MainActivity : AppCompatActivity() {
             .commit()
     }
 
-    /** 主题模式：system / dark / light */
-    private fun applyTheme() {
-        when (Prefs.themeMode) {
-            "light" -> setTheme(R.style.Theme_SMSATBOX_Light)
-            "dark" -> setTheme(R.style.Theme_SMSATBOX)
-            else -> setTheme(R.style.Theme_SMSATBOX)
-        }
-    }
-
+    /** 状态栏 / 导航栏图标明暗：由当前实际生效的日夜模式决定（系统已自动切换资源）。 */
     @SuppressLint("InlinedApi")
     private fun applySystemBarStyle() {
-        val isLight = Prefs.themeMode == "light" ||
-                (Prefs.themeMode == "system" && isSystemInLightMode())
+        val isLight = isLightThemeNow()
         val controller = window.insetsController
         if (controller != null) {
             val appearance = if (isLight) {
@@ -116,7 +106,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun isSystemInLightMode(): Boolean {
+    /** 当前解析后的主题是否为浅色（系统日夜模式已由 AppCompatDelegate 接管）。 */
+    private fun isLightThemeNow(): Boolean {
         val mode = resources.configuration.uiMode and
                 android.content.res.Configuration.UI_MODE_NIGHT_MASK
         return mode != android.content.res.Configuration.UI_MODE_NIGHT_YES

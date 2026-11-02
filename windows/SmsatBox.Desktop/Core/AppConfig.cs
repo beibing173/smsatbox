@@ -12,9 +12,9 @@ public sealed class AppConfig
     [JsonPropertyName("token")]
     public string Token { get; set; } = "";
 
-    /// <summary>dark / light。</summary>
+    /// <summary>主题模式：system（跟随系统，默认）/ dark / light。</summary>
     [JsonPropertyName("theme")]
-    public string Theme { get; set; } = "dark";
+    public string Theme { get; set; } = "system";
 
     [JsonPropertyName("notify_enabled")]
     public bool NotifyEnabled { get; set; } = true;
@@ -33,7 +33,20 @@ public sealed class AppConfig
         !string.IsNullOrWhiteSpace(ServerUrl) && !string.IsNullOrWhiteSpace(Token);
 
     [JsonIgnore]
-    public bool IsDarkTheme => !string.Equals(Theme, "light", StringComparison.OrdinalIgnoreCase);
+    public bool IsDarkTheme => ThemeManager.IsDark;
+
+    /// <summary>主题模式枚举。</summary>
+    [JsonIgnore]
+    public ThemeMode ThemeMode
+    {
+        get => Theme.Trim().ToLowerInvariant() switch
+        {
+            "dark" => ThemeMode.Dark,
+            "light" => ThemeMode.Light,
+            _ => ThemeMode.System,
+        };
+        set => Theme = ThemeManager.SerializeMode(value);
+    }
 
     public AppConfig Clone() => new()
     {

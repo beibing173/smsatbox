@@ -18,16 +18,29 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- 品牌 -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
-            <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource Brush.Accent}">
-                <TextBlock Text="📨" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
-            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
-                <TextBlock Text="SMSATBOX" Style="{StaticResource Text.H1}" />
-                <TextBlock Text="短信 / 未接来电 多卡提醒盒子" Style="{StaticResource Text.Muted}" Margin="0,2,0,0" />
+        <!-- 品牌 + 主题切换 -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource Brush.Accent}">
+                    <TextBlock Text="📨" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+                <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="SMSATBOX" Style="{StaticResource Text.H1}" />
+                    <TextBlock Text="短信 / 未接来电 多卡提醒盒子" Style="{StaticResource Text.Muted}" Margin="0,2,0,0" />
+                </StackPanel>
             </StackPanel>
-        </StackPanel>
+
+            <!-- 主题切换：跟随系统 / 深色 / 浅色 -->
+            <Button Grid.Column="1" x:Name="ThemeButton" Style="{StaticResource Btn.Ghost}"
+                    Content="🖥 跟随系统" Padding="10,6" VerticalAlignment="Center"
+                    Click="OnThemeButtonClick"
+                    ToolTip="切换主题：跟随系统 → 深色 → 浅色" />
+        </Grid>
 
         <!-- 说明 -->
         <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,26,0,0" Padding="16,14">

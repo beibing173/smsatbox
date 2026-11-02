@@ -70,11 +70,15 @@
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <StackPanel>
-                            <TextBlock Text="深色 / 浅色主题" Style="{StaticResource Text.Base}" />
-                            <TextBlock Text="切换后立即生效，并记住你的选择" Style="{StaticResource Text.Muted}"
-                                       Margin="0,3,0,0" />
+                            <TextBlock Text="外观主题" Style="{StaticResource Text.Base}" />
+                            <TextBlock Text="跟随系统 = 自动同步 Windows 的应用主题；切换后立即生效并记住选择"
+                                       Style="{StaticResource Text.Muted}" TextWrapping="Wrap" MaxWidth="380"
+                                       HorizontalAlignment="Left" Margin="0,3,0,0" />
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <ToggleButton x:Name="SystemThemeButton" Style="{StaticResource Chip}"
+                                          Content="🖥 跟随系统" Margin="0,0,8,0"
+                                          Click="OnSystemThemeClick" />
                             <ToggleButton x:Name="DarkThemeButton" Style="{StaticResource Chip}" Content="🌙 深色"
                                           Margin="0,0,8,0" Click="OnDarkThemeClick" />
                             <ToggleButton x:Name="LightThemeButton" Style="{StaticResource Chip}" Content="☀ 浅色"

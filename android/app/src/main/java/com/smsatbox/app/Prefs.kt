@@ -4,6 +4,25 @@ import android.content.Context
 import android.content.SharedPreferences
 
 /**
+ * 主题模式。
+ */
+enum class ThemeMode(val key: String) {
+    /** 跟随系统（默认）。 */
+    SYSTEM("system"),
+
+    /** 强制深色。 */
+    DARK("dark"),
+
+    /** 强制浅色。 */
+    LIGHT("light");
+
+    companion object {
+        fun fromKey(value: String?): ThemeMode =
+            entries.firstOrNull { it.key == value } ?: SYSTEM
+    }
+}
+
+/**
  * 本地配置存储。
  *
  * 只保存客户端所需的连接信息与外观偏好，不保存任何服务器端凭据。
@@ -34,10 +53,10 @@ object Prefs {
         get() = sp.getString(KEY_TOKEN, "") ?: ""
         set(value) = sp.edit().putString(KEY_TOKEN, value).apply()
 
-    /** "system" | "dark" | "light" */
-    var themeMode: String
-        get() = sp.getString(KEY_THEME, "system") ?: "system"
-        set(value) = sp.edit().putString(KEY_THEME, value).apply()
+    /** 主题模式，默认跟随系统。 */
+    var themeMode: ThemeMode
+        get() = ThemeMode.fromKey(sp.getString(KEY_THEME, null))
+        set(value) = sp.edit().putString(KEY_THEME, value.key).apply()
 
     var notifyEnabled: Boolean
         get() = sp.getBoolean(KEY_NOTIFY, true)

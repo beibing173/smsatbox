@@ -44,8 +44,9 @@ public partial class SettingsPage : UserControl
             PollTextBox.Text = ConfigStore.ClampPoll(cfg.PollSeconds).ToString();
 
             var dark = ThemeManager.IsDark;
-            DarkThemeButton.IsChecked = dark;
-            LightThemeButton.IsChecked = !dark;
+            SystemThemeButton.IsChecked = ThemeManager.Mode == ThemeMode.System;
+            DarkThemeButton.IsChecked = ThemeManager.Mode == ThemeMode.Dark;
+            LightThemeButton.IsChecked = ThemeManager.Mode == ThemeMode.Light;
         }
         finally
         {
@@ -144,24 +145,33 @@ public partial class SettingsPage : UserControl
 
     // ===== 主题 =====
 
-    private void OnDarkThemeClick(object sender, RoutedEventArgs e) => SetTheme("dark");
+    private void OnSystemThemeClick(object sender, RoutedEventArgs e) => SetTheme(ThemeMode.System);
 
-    private void OnLightThemeClick(object sender, RoutedEventArgs e) => SetTheme("light");
+    private void OnDarkThemeClick(object sender, RoutedEventArgs e) => SetTheme(ThemeMode.Dark);
 
-    private void SetTheme(string theme)
+    private void OnLightThemeClick(object sender, RoutedEventArgs e) => SetTheme(ThemeMode.Light);
+
+    private void SetTheme(ThemeMode mode)
     {
         if (_suppressToggleEvents)
         {
             return;
         }
 
-        ThemeManager.Apply(theme);
-        App.Config.Theme = ThemeManager.Current;
+        ThemeManager.SetMode(mode);
+        App.Config.Theme = ThemeManager.SerializeMode(mode);
         App.SaveConfig();
 
+        SyncThemeButtons();
+    }
+
+    /// <summary>把三个按钮的选中状态与当前模式对齐。</summary>
+    private void SyncThemeButtons()
+    {
         _suppressToggleEvents = true;
-        DarkThemeButton.IsChecked = ThemeManager.IsDark;
-        LightThemeButton.IsChecked = !ThemeManager.IsDark;
+        SystemThemeButton.IsChecked = ThemeManager.Mode == ThemeMode.System;
+        DarkThemeButton.IsChecked = ThemeManager.Mode == ThemeMode.Dark;
+        LightThemeButton.IsChecked = ThemeManager.Mode == ThemeMode.Light;
         _suppressToggleEvents = false;
     }
 

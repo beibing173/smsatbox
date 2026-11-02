@@ -9,8 +9,9 @@ import android.os.Build
  * SMSATBOX 应用入口。
  *
  * 职责：
+ *  - 在最早时机应用主题（避免启动闪屏配色错误）
  *  - 创建 Android 8.0+ 必需的通知渠道
- *  - 持有全局单例（配置、API 客户端）
+ *  - 持有全局单例（配置）
  */
 class SmsatApp : Application() {
 
@@ -23,7 +24,12 @@ class SmsatApp : Application() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+
         Prefs.init(this)
+
+        // 主题必须在任何 Activity 创建前应用
+        ThemeApplier.applySaved(this)
+
         createNotificationChannel()
     }
 

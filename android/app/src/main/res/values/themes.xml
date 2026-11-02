@@ -10,15 +10,10 @@
         <item name="colorOnBackground">@color/text_0</item>
         <item name="android:statusBarColor">@color/bg_1</item>
         <item name="android:navigationBarColor">@color/bg_1</item>
-        <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
         <item name="android:windowBackground">@color/bg_0</item>
     </style>
 
-    <style name="Theme.SMSATBOX.Light" parent="Theme.SMSATBOX">
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
-    </style>
+    <style name="Theme.SMSATBOX.Light" parent="Theme.SMSATBOX" />
 
     <!-- 通用文字样式 -->
     <style name="Text_Title">
