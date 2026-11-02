@@ -90,18 +90,47 @@ smoke → 拉起镜像真跑，健康检查 + 版本比对 + 登录冒烟
 
 ---
 
-## 版本号管理
+## 版本号管理（分平台独立）
 
-全平台唯一来源：仓库根目录 [`VERSION`](VERSION) 文件。
+**三个平台各自一套版本号**，互不强制一致：
 
-```bash
-./scripts/version.sh name          # 1.0.0
-./scripts/version.sh code          # 10000
-./scripts/version.sh write-gradle android
+```
+versions/server.txt    → 1.0.0   服务端 / 固件
+versions/android.txt   → 1.0.0   APK
+versions/windows.txt   → 1.0.0   EXE
 ```
 
-改版本只需改这一个文件，CI 自动同步到 Android `versionName/versionCode`、
-Windows 程序集版本、Docker 镜像 tag、Release tag。
+```bash
+./scripts/version.sh all              # 查看三端版本 + 快照号
+./scripts/version.sh android name     # 1.0.0
+./scripts/version.sh android code     # 10000
+./scripts/version.sh windows name     # 1.0.0
+./scripts/version.sh sync             # 写进各端源码
+./scripts/version.sh snapshot         # 2026.11.02-r1（Release tag）
+```
+
+### 一个 Release 承载两端，但各端独立升级
+
+Release 的 **tag 是日期快照号**（`v2026.11.02-r1`），只作归档标识，**不代表任何一端的版本**。
+
+真正的平台版本写在**附件文件名**里：
+
+```
+smsatbox-android-1.2.0.apk
+smsatbox-windows-1.0.5.exe
+```
+
+客户端升级时只解析**自己那个附件**的版本：
+
+| 客户端 | 只认这个文件名 | 用它比对 |
+| --- | --- | --- |
+| Android | `smsatbox-android-*.apk` | 与本机 `versionName` 比 |
+| Windows | `smsatbox-windows-*.exe` | 与本机 `AppInfo.Version` 比 |
+
+所以 Android 发 `1.2.0` 时，Windows 端（`1.0.5`）**不会**被误触发升级，反之亦然。
+两端可以同一天发版共用一个 Release，也可以只发其中一端。
+
+> ESP32 固件版本跟随 Server，走 Docker Hub + OTA 通道，不进 GitHub Release。
 
 ---
 
@@ -130,9 +159,25 @@ Windows 程序集版本、Docker 镜像 tag、Release tag。
 | ESP32 ↔ Server 协议 | 36 项全通过 |
 | Android release 构建 | ✅ CI 产包 |
 | Windows EXE 构建 | ✅ CI 产包 |
-| GitHub Release | [v1.0.0 已发布](https://github.com/beibing173/smsatbox/releases/tag/v1.0.0) |
+| GitHub Release | [v2026.11.02-r1 已发布](https://github.com/beibing173/smsatbox/releases/tag/v2026.11.02-r1) |
+| 分平台版本解析 | ✅ 两端各读自己附件，互不干扰 |
 | APK 签名校验 | SHA-256 `24bcd123…` |
 | Release 产物 SHA256 | 与 SHA256SUMS.txt 一致 |
+
+---
+
+## 主题（三端统一）
+
+**默认全部跟随系统**，可手动切换，选择记忆到本地。
+
+| 端 | 默认 | 切换入口 |
+| --- | --- | --- |
+| Web | 跟随系统（`prefers-color-scheme`） | 侧栏底部 / 顶栏图标 / 设置页三选一 |
+| Android | 跟随系统（`AppCompatDelegate.MODE_NIGHT_FOLLOW_SYSTEM`） | 设置页三档单选 |
+| Windows | 跟随系统（读注册表，**只读不写**） | 登录窗按钮 / 设置页三档开关 |
+
+> 三端都**不会修改操作系统的外观设置**。Windows 端早期版本曾写入
+> `HKCU\...\Themes\Personalize\AppsUseLightTheme`，该行为已彻底移除。
 
 ---
 
@@ -144,3 +189,5 @@ Windows 程序集版本、Docker 镜像 tag、Release tag。
   `DOCKERHUB_USERNAME` 和 `DOCKERHUB_TOKEN` 才能推送镜像。
 - **APK 签名**：CI 每次动态生成密钥（无泄漏风险），代价是覆盖安装需先卸载。
   长期发布建议改用固定 keystore。
+- **旧命名兼容**：升级逻辑仍能识别旧的 `smsatbox-v1.0.0.apk` / `.exe`，
+  但新构建一律用带平台的新命名。
