@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 升级下载的 APK 存放位置 -->
+    <external-files-path
+        name="updates"
+        path="updates/" />
+    <cache-path
+        name="cache"
+        path="." />
+</paths>

@@ -1,0 +1,228 @@
+# ==============================================================================
+# SMSATBOX · 维度二：Server 云端打包（Docker）
+# ------------------------------------------------------------------------------
+# 触发条件：
+#   - push tag   v*        （如 v1.0.0）
+#   - push 到    main
+#   - 手动触发     workflow_dispatch（可指定 tag）
+#
+# 产物：Docker Hub  beibing173/smsatbox-server
+#        标签规则：同版本覆盖已有标签，不同版本新建标签
+#        每次额外推送 latest / major.minor / short-sha
+#
+# 注意：ESP32 固件不参与本流水线，也不进 GitHub Release。
+# ==============================================================================
+name: docker-build
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      push_image:
+        description: "是否推送到 Docker Hub"
+        type: boolean
+        default: true
+
+env:
+  IMAGE_NAME: beibing173/smsatbox-server
+  PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1) 质量门禁：跑服务端测试，测试不过不构建镜像
+  # ---------------------------------------------------------------------------
+  test:
+    name: 测试 (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: server/requirements-dev.txt
+
+      - name: 安装依赖
+        working-directory: server
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: 读取版本号
+        id: version
+        run: |
+          VERSION=$(python -c "import re,sys;print(re.search(r'VERSION\s*=\s*\"([^\"]+)\"', open('server/app/version.py',encoding='utf-8').read()).group(1))")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "当前版本: $VERSION"
+
+      - name: 运行测试
+        working-directory: server
+        run: pytest tests -q
+
+      - name: 版本信息
+        run: echo "SMSATBOX Server v${{ steps.version.outputs.version }}"
+
+  # ---------------------------------------------------------------------------
+  # 2) 构建并推送镜像
+  # ---------------------------------------------------------------------------
+  build:
+    name: 构建与推送镜像
+    needs: test
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'pull_request' &&
+      (github.event.inputs.push_image != 'false')
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 计算镜像元数据
+        id: meta
+        run: |
+          set -euo pipefail
+          # 版本来源优先级：tag > version.py
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(python3 -c "import re;print(re.search(r'VERSION\s*=\s*\"([^\"]+)\"', open('server/app/version.py',encoding='utf-8').read()).group(1))")
+          fi
+          MAJOR_MINOR=$(echo "$VERSION" | awk -F. '{print $1"."$2}')
+          SHORT_SHA=$(echo "${GITHUB_SHA}" | cut -c1-7)
+
+          echo "version=$VERSION"                >> "$GITHUB_OUTPUT"
+          echo "major_minor=$MAJOR_MINOR"        >> "$GITHUB_OUTPUT"
+          echo "short_sha=$SHORT_SHA"            >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+          # 镜像标签：同版本覆盖（docker push 天然覆盖同名 tag），不同版本新建
+          {
+            echo "tags<<EOF"
+            echo "${IMAGE_NAME}:${VERSION}"
+            echo "${IMAGE_NAME}:${MAJOR_MINOR}"
+            echo "${IMAGE_NAME}:latest"
+            echo "${IMAGE_NAME}:sha-${SHORT_SHA}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "版本=$VERSION 标签组: v$VERSION / $MAJOR_MINOR / latest / sha-$SHORT_SHA"
+
+      - name: 设置 QEMU（多架构）
+        uses: docker/setup-qemu-action@v3
+
+      - name: 设置 Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: 登录 Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: 提取镜像元数据（OCI 标签）
+        id: labels
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_NAME }}
+          labels: |
+            org.opencontainers.image.title=SMSATBOX Server
+            org.opencontainers.image.description=短信/未接来电多卡提醒盒子 · 云端中转平台
+            org.opencontainers.image.version=${{ steps.meta.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: 构建并推送
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.labels.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.meta.outputs.version }}
+            BUILD_DATE=${{ steps.meta.outputs.build_date }}
+            VCS_REF=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: 构建结果
+        run: |
+          {
+            echo "### SMSATBOX Server 镜像已推送 🐳"
+            echo ""
+            echo "| 项目 | 值 |"
+            echo "| --- | --- |"
+            echo "| 版本 | \`${{ steps.meta.outputs.version }}\` |"
+            echo "| 镜像 | \`${IMAGE_NAME}\` |"
+            echo "| 摘要 | \`${{ steps.build.outputs.digest }}\` |"
+            echo "| 架构 | \`${{ env.PLATFORMS }}\` |"
+            echo ""
+            echo '```bash'
+            echo "docker pull ${IMAGE_NAME}:${{ steps.meta.outputs.version }}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # 3) 冒烟验证：把刚推送的镜像真的拉起来跑一遍
+  # ---------------------------------------------------------------------------
+  smoke:
+    name: 镜像冒烟验证
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 拉取并启动容器
+        run: |
+          docker pull ${IMAGE_NAME}:${{ needs.build.outputs.version }}
+          docker run -d --name smsatbox-smoke \
+            -p 8080:8080 \
+            -e ADMIN_PASSWORD=Smoke@123456 \
+            -e SECRET_KEY=smoke-test-secret \
+            ${IMAGE_NAME}:${{ needs.build.outputs.version }}
+
+      - name: 等待健康检查
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/api/v1/health > /tmp/health.json; then
+              echo "健康检查通过: $(cat /tmp/health.json)"
+              break
+            fi
+            sleep 2
+            if [ "$i" -eq 30 ]; then
+              echo "健康检查超时"; docker logs smsatbox-smoke; exit 1
+            fi
+          done
+
+      - name: 验证版本号与登录
+        run: |
+          VERSION=$(curl -fsS http://127.0.0.1:8080/api/v1/version | tee /dev/stderr | python3 -c "import sys,json;print(json.load(sys.stdin)['version'])")
+          echo "镜像内版本: $VERSION"
+          [ "$VERSION" = "${{ needs.build.outputs.version }}" ] || { echo "版本不一致"; exit 1; }
+
+          CODE=$(curl -s -o /tmp/login.json -w "%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -d '{"username":"admin","password":"Smoke@123456"}' \
+            http://127.0.0.1:8080/api/v1/auth/login)
+          [ "$CODE" = "200" ] || { echo "登录失败: $CODE"; cat /tmp/login.json; exit 1; }
+          echo "登录冒烟通过"
+
+      - name: 输出日志
+        if: always()
+        run: docker logs smsatbox-smoke || true
+
+      - name: 清理
+        if: always()
+        run: docker rm -f smsatbox-smoke || true

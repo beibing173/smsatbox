@@ -1,0 +1,20 @@
+# SMSATBOX ESP32-S3 N16R8 partition table (16MB flash)
+# NOTE: keep this file ASCII-only. PlatformIO's size-checker reads it with the
+#       system default codec on Windows (GBK), so non-ASCII comments break the
+#       build. Explanations live in README.md instead.
+#
+#  addr math (must not overlap):
+#    0x9000   + 0x5000   = 0xE000      nvs
+#    0xE000   + 0x2000   = 0x10000     otadata
+#    0x10000  + 0x400000 = 0x410000    app0  (4MB)
+#    0x410000 + 0x400000 = 0x810000    app1  (4MB)
+#    0x810000 + 0x700000 = 0xF10000    spiffs (7MB)
+#    0xF10000 + 0x10000  = 0xF20000    coredump (64KB)  <= 16MB
+#
+# Name,     Type, SubType,  Offset,    Size,     Flags
+nvs,        data, nvs,      0x9000,    0x5000,
+otadata,    data, ota,      0xE000,    0x2000,
+app0,       app,  ota_0,    0x10000,   0x400000,
+app1,       app,  ota_1,    0x410000,  0x400000,
+spiffs,     data, spiffs,   0x810000,  0x700000,
+coredump,   data, coredump, 0xF10000,  0x10000,

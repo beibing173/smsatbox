@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="@color/bg_0">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="22dp"
+        android:gravity="center_vertical"
+        android:minHeight="600dp">
+
+        <!-- Logo 区 -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <ImageView
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:src="@mipmap/ic_launcher"
+                android:contentDescription="@string/app_name" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginStart="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/app_name"
+                    android:textSize="20sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_0" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/app_subtitle"
+                    android:textSize="12sp"
+                    android:textColor="@color/text_2" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/login_title"
+            android:textSize="15sp"
+            android:textColor="@color/text_1"
+            android:layout_marginTop="28dp"
+            android:layout_marginBottom="4dp" />
+
+        <!-- 平台地址 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_server"
+            android:textSize="12sp"
+            android:textColor="@color/text_2"
+            android:layout_marginTop="16dp" />
+
+        <EditText
+            android:id="@+id/serverInput"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:hint="@string/login_server_hint"
+            android:textColorHint="@color/text_2"
+            android:textColor="@color/text_0"
+            android:textSize="14sp"
+            android:background="@drawable/bg_input"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:inputType="textUri"
+            android:maxLines="1"
+            android:importantForAutofill="no" />
+
+        <!-- Token -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_token"
+            android:textSize="12sp"
+            android:textColor="@color/text_2"
+            android:layout_marginTop="14dp" />
+
+        <EditText
+            android:id="@+id/tokenInput"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:hint="@string/login_token_hint"
+            android:textColorHint="@color/text_2"
+            android:textColor="@color/text_0"
+            android:textSize="14sp"
+            android:background="@drawable/bg_input"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp"
+            android:inputType="textPassword"
+            android:maxLines="1"
+            android:importantForAutofill="no" />
+
+        <TextView
+            android:id="@+id/errorText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/danger"
+            android:textSize="12sp"
+            android:layout_marginTop="10dp"
+            android:visibility="gone" />
+
+        <ProgressBar
+            android:id="@+id/progressBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:visibility="gone"
+            android:layout_gravity="center_horizontal" />
+
+        <Button
+            android:id="@+id/loginButton"
+            style="@style/Button_Primary"
+            android:layout_width="match_parent"
+            android:layout_height="50dp"
+            android:text="@string/login_button"
+            android:textSize="15sp"
+            android:layout_marginTop="20dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Token 可在管理端「设置 → 客户端令牌」生成"
+            android:textSize="11sp"
+            android:textColor="@color/text_2"
+            android:layout_marginTop="14dp"
+            android:gravity="center" />
+
+        <TextView
+            android:id="@+id/versionText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="v1.0.0"
+            android:textSize="11sp"
+            android:textColor="@color/text_2"
+            android:layout_marginTop="24dp"
+            android:gravity="center" />
+
+    </LinearLayout>
+</ScrollView>

@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b111d" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f4f7fb" media="(prefers-color-scheme: light)" />
+  <meta name="description" content="SMSATBOX · 短信 / 未接来电多卡提醒盒子 · 云端中转平台" />
+  <title>SMSATBOX 管理端 v1.0.0</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/assets/styles.css" />
+  <script>
+    /* 主题预置：在样式表应用前就定好，避免首屏闪白/闪黑 */
+    (function () {
+      try {
+        var saved = localStorage.getItem("smsatbox.theme");
+        var theme = saved === "light" || saved === "dark"
+          ? saved
+          : (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+        document.documentElement.setAttribute("data-theme", theme);
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "dark");
+      }
+    })();
+  </script>
+
+</head>
+<body>
+
+<!-- ============================ 登录 ============================ -->
+<section id="login-view">
+  <button class="theme-toggle floating" id="login-theme-btn" type="button" title="切换深浅色主题">
+    <span class="ico">🌙</span><span class="lbl">深色</span>
+  </button>
+  <div class="login-card">
+    <div class="logo-row">
+      <div class="logo-mark">📨</div>
+      <div>
+        <div class="logo-text">SMSATBOX</div>
+        <div class="logo-sub">短信 / 未接来电 多卡提醒盒子</div>
+      </div>
+    </div>
+
+    <form id="login-form" autocomplete="on">
+      <div class="field">
+        <label for="login-user">用户名</label>
+        <input id="login-user" name="username" type="text" autocomplete="username" required placeholder="请输入用户名" />
+      </div>
+      <div class="field">
+        <label for="login-pass">密码</label>
+        <input id="login-pass" name="password" type="password" autocomplete="current-password" required placeholder="请输入密码" />
+      </div>
+      <div class="field">
+        <button class="btn btn-primary btn-block" type="submit" id="login-btn">登 录</button>
+      </div>
+    </form>
+
+    <div class="login-hint">
+      服务器：<span id="login-server">-</span><br />
+      首次使用默认管理员：<code>admin / Admin@123456</code>（请在 .env 中修改）
+    </div>
+    <div class="login-footer">SMSATBOX Server <span class="ver" id="login-version">v1.0.0</span></div>
+  </div>
+</section>
+
+<!-- ============================ 主界面 ============================ -->
+<div id="app-view">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo-mark">📨</div>
+      <div>
+        <div class="logo-text" style="font-size:15px">SMSATBOX</div>
+        <div class="logo-sub" style="font-size:10.5px">多卡提醒盒子</div>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <button class="nav-item active" data-route="messages"><span class="ico">💬</span><span>消息总览</span><span class="nav-badge hidden" id="nav-unread">0</span></button>
+      <button class="nav-item" data-route="send"><span class="ico">📤</span><span>反向控制</span></button>
+      <button class="nav-item" data-route="devices"><span class="ico">📡</span><span>设备管理</span></button>
+      <button class="nav-item hidden" data-route="members" id="nav-members"><span class="ico">👥</span><span>成员权限</span></button>
+      <button class="nav-item" data-route="settings"><span class="ico">⚙️</span><span>设置</span></button>
+    </nav>
+
+    <div class="side-theme-wrap" style="padding:8px 2px 10px">
+      <button class="theme-toggle" id="side-theme-btn" type="button" style="width:100%;justify-content:center" title="切换深浅色主题">
+        <span class="ico">🌙</span><span class="lbl">深色模式</span>
+      </button>
+    </div>
+
+    <div class="sidebar-foot">
+      <div class="user-line" id="side-user">-</div>
+      <div>版本 <span class="ver" id="side-version">v1.0.0</span></div>
+      <div>连接 <span id="side-ws">未连接</span></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="mobile-top">
+      <span>SMSATBOX</span>
+      <span style="flex:1"></span>
+      <button class="theme-toggle" id="mobile-theme-btn" type="button" title="切换深浅色主题">
+        <span class="ico">🌙</span><span class="lbl">深色</span>
+      </button>
+      <span class="ver" id="mobile-version">v1.0.0</span>
+    </div>
+
+    <!-- 消息总览 -->
+    <section class="route" id="route-messages">
+      <div class="topbar">
+        <h1>消息总览</h1>
+        <span class="pill"><span class="dot" id="ws-dot"></span><span id="ws-text">实时连接中</span></span>
+        <div class="spacer"></div>
+        <button class="btn btn-sm" id="btn-refresh">刷新</button>
+        <button class="btn btn-sm" id="btn-readall">全部已读</button>
+      </div>
+
+      <div class="grid grid-4" style="margin-bottom:14px">
+        <div class="card stat-card"><div class="label">消息总数</div><div class="value" id="stat-total">0</div></div>
+        <div class="card stat-card"><div class="label">未读</div><div class="value accent" id="stat-unread">0</div></div>
+        <div class="card stat-card"><div class="label">今日</div><div class="value" id="stat-today">0</div></div>
+        <div class="card stat-card"><div class="label">验证码</div><div class="value" id="stat-codes">0</div></div>
+      </div>
+
+      <div class="toolbar">
+        <input type="search" id="msg-search" placeholder="搜索号码 / 内容 / 验证码…" />
+        <select id="msg-kind">
+          <option value="">全部类型</option>
+          <option value="sms">短信</option>
+          <option value="call">来电</option>
+          <option value="system">系统</option>
+        </select>
+        <select id="msg-slot"><option value="">全部卡槽</option></select>
+      </div>
+
+      <div class="msg-list" id="msg-list"></div>
+      <div style="margin-top:14px;text-align:center">
+        <button class="btn btn-sm" id="btn-more">加载更多</button>
+      </div>
+    </section>
+
+    <!-- 反向控制 -->
+    <section class="route hidden" id="route-send">
+      <div class="topbar"><h1>反向控制 · 下发短信</h1></div>
+      <div class="card" style="max-width:560px">
+        <div class="field">
+          <label>发送卡槽</label>
+          <select id="send-slot"></select>
+        </div>
+        <div class="field">
+          <label>接收号码</label>
+          <input id="send-target" type="text" placeholder="例如 13800138000" />
+        </div>
+        <div class="field">
+          <label>短信内容</label>
+          <textarea id="send-content" rows="4" placeholder="仅限 500 字以内"></textarea>
+        </div>
+        <div class="field">
+          <button class="btn btn-primary" id="btn-send">通过设备下发</button>
+        </div>
+        <p style="color:var(--text-2);font-size:12px;line-height:1.7;margin-top:6px">
+          指令会经 WebSocket 实时推送到 ESP32；若设备离线则入库排队，设备上线后自动补发。
+        </p>
+      </div>
+
+      <h2 style="font-size:15px;margin:22px 0 10px">最近指令</h2>
+      <div class="card" style="padding:0;overflow:auto">
+        <table>
+          <thead><tr><th>ID</th><th>号码</th><th>内容</th><th>状态</th><th>时间</th></tr></thead>
+          <tbody id="cmd-table"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- 设备管理 -->
+    <section class="route hidden" id="route-devices">
+      <div class="topbar">
+        <h1>设备管理</h1>
+        <div class="spacer"></div>
+        <button class="btn btn-sm" id="btn-dev-refresh">刷新</button>
+        <button class="btn btn-sm btn-primary hidden" id="btn-dev-add">新增设备</button>
+      </div>
+      <div id="device-list" class="grid" style="grid-template-columns:1fr"></div>
+    </section>
+
+    <!-- 成员权限 -->
+    <section class="route hidden" id="route-members">
+      <div class="topbar">
+        <h1>成员权限</h1>
+        <div class="spacer"></div>
+        <button class="btn btn-sm btn-primary" id="btn-user-add">新增成员</button>
+      </div>
+      <div class="card" style="padding:0;overflow:auto">
+        <table>
+          <thead><tr><th>ID</th><th>用户名</th><th>角色</th><th>状态</th><th>卡槽权限</th><th>操作</th></tr></thead>
+          <tbody id="user-table"></tbody>
+        </table>
+      </div>
+      <p style="color:var(--text-2);font-size:12px;margin-top:12px">
+        普通成员只能看到被授权的卡槽消息；勾选“可发短信”后该成员才能通过该卡槽下发短信。
+      </p>
+    </section>
+
+    <!-- 设置 -->
+    <section class="route hidden" id="route-settings">
+      <div class="topbar"><h1>设置</h1></div>
+      <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">
+        <div class="card">
+          <h3 style="margin:0 0 12px;font-size:14px">账号信息</h3>
+          <div class="kv" style="margin-bottom:10px"><div class="k">用户名</div><div class="v" id="set-user">-</div></div>
+          <div class="kv" style="margin-bottom:10px"><div class="k">角色</div><div class="v" id="set-role">-</div></div>
+          <div class="field">
+            <label>原密码</label><input id="old-pass" type="password" />
+          </div>
+          <div class="field">
+            <label>新密码（≥8 位）</label><input id="new-pass" type="password" />
+          </div>
+          <div class="field"><button class="btn" id="btn-pass">修改密码</button></div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 12px;font-size:14px">外观主题</h3>
+          <p style="color:var(--text-2);font-size:12px;line-height:1.7;margin-top:0">
+            黑白两色可随时切换，选择会被记住。默认跟随系统设置。
+          </p>
+          <div class="field">
+            <label>主题模式</label>
+            <select id="theme-select">
+              <option value="system">跟随系统</option>
+              <option value="dark">深色（Dark）</option>
+              <option value="light">浅色（Light）</option>
+            </select>
+          </div>
+          <div class="slot-row" style="margin-top:10px">
+            <span style="font-size:12px;color:var(--text-2)">当前生效</span>
+            <span class="tag slot" id="theme-current">深色</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 12px;font-size:14px">客户端令牌</h3>
+          <p style="color:var(--text-2);font-size:12px;line-height:1.7">
+            APK / EXE 端可直接使用长效令牌登录，避免反复输入密码。
+          </p>
+          <div class="field"><button class="btn btn-sm" id="btn-mktoken">生成新令牌</button></div>
+          <div id="token-box" class="hidden" style="margin-top:10px">
+            <div class="code-chip" id="token-value" style="letter-spacing:0;word-break:break-all">-</div>
+            <p style="font-size:11.5px;color:var(--warn)">仅显示一次，请立即保存。</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3 style="margin:0 0 12px;font-size:14px">关于</h3>
+          <div class="kv" style="margin-bottom:8px"><div class="k">Server 版本</div><div class="v" id="set-server-ver">-</div></div>
+          <div class="kv" style="margin-bottom:8px"><div class="k">Web 端版本</div><div class="v">v1.0.0</div></div>
+          <div class="kv"><div class="k">API 地址</div><div class="v" style="font-size:12px">/api/v1</div></div>
+          <div class="field"><button class="btn btn-sm btn-danger" id="btn-logout">退出登录</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div id="toasts"></div>
+<div id="modal-root"></div>
+
+<script src="/assets/app.js"></script>
+</body>
+</html>

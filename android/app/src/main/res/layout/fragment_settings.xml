@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="@color/bg_0">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_title"
+            android:textSize="19sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_0"
+            android:layout_marginBottom="14dp" />
+
+        <!-- 连接信息 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="连接信息"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_0" />
+
+            <TextView style="@style/StatLabel" android:text="@string/settings_server"
+                android:layout_marginTop="10dp" />
+            <TextView
+                android:id="@+id/serverValue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="@color/text_1"
+                android:text="-" />
+
+            <TextView style="@style/StatLabel" android:text="@string/settings_token"
+                android:layout_marginTop="8dp" />
+            <TextView
+                android:id="@+id/tokenValue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="@color/text_1"
+                android:fontFamily="monospace"
+                android:text="-" />
+
+            <TextView style="@style/StatLabel" android:text="当前账号"
+                android:layout_marginTop="8dp" />
+            <TextView
+                android:id="@+id/userValue"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="13sp"
+                android:textColor="@color/text_1"
+                android:text="-" />
+        </LinearLayout>
+
+        <!-- 外观主题 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_theme"
+                android:textSize="14sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_0" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="黑白两色可随时切换，选择会被记住"
+                android:textSize="11sp"
+                android:textColor="@color/text_2"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="8dp" />
+
+            <RadioGroup
+                android:id="@+id/themeGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <RadioButton
+                    android:id="@+id/theme_system"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/settings_theme_system"
+                    android:textSize="13sp"
+                    android:textColor="@color/text_1"
+                    android:buttonTint="@color/brand" />
+
+                <RadioButton
+                    android:id="@+id/theme_dark"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/settings_theme_dark"
+                    android:textSize="13sp"
+                    android:textColor="@color/text_1"
+                    android:buttonTint="@color/brand" />
+
+                <RadioButton
+                    android:id="@+id/theme_light"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/settings_theme_light"
+                    android:textSize="13sp"
+                    android:textColor="@color/text_1"
+                    android:buttonTint="@color/brand" />
+            </RadioGroup>
+        </LinearLayout>
+
+        <!-- 通知 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_card"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/settings_notifications"
+                android:textSize="14sp"
+                android:textColor="@color/text_0" />
+
+            <com.google.android.material.switchmaterial.SwitchMaterial
+                android:id="@+id/notifySwitch"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content" />
+        </LinearLayout>
+
+        <!-- 更新 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_card"
+            android:padding="14dp"
+            android:layout_marginTop="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="版本更新"
+                    android:textSize="14sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_0" />
+
+                <TextView
+                    android:id="@+id/currentVersion"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="12sp"
+                    android:textColor="@color/brand"
+                    android:text="v1.0.0" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="直连 GitHub Release 检查，不经过 Server 中转"
+                android:textSize="11sp"
+                android:textColor="@color/text_2"
+                android:layout_marginTop="4dp" />
+
+            <Button
+                android:id="@+id/updateButton"
+                android:layout_width="match_parent"
+                android:layout_height="44dp"
+                android:layout_marginTop="10dp"
+                android:text="@string/settings_check_update"
+                android:textSize="13sp"
+                android:textColor="@color/text_0"
+                android:background="@drawable/bg_input"
+                 />
+        </LinearLayout>
+
+        <!-- 退出 -->
+        <Button
+            android:id="@+id/logoutButton"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="16dp"
+            android:text="@string/settings_logout"
+            android:textSize="14sp"
+            android:textColor="@color/danger"
+            android:background="@drawable/bg_input"
+             />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/app_subtitle"
+            android:textSize="11sp"
+            android:textColor="@color/text_2"
+            android:gravity="center"
+            android:layout_marginTop="20dp"
+            android:layout_marginBottom="10dp" />
+
+    </LinearLayout>
+</ScrollView>

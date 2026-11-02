@@ -1,0 +1,407 @@
+name: Build & Release
+
+# ============================================================================
+#  SMSATBOX · 维度一：外部用户端发布（APK & EXE）
+# ----------------------------------------------------------------------------
+#  触发：
+#    - push 到 main/master
+#    - 手动触发（可选强制重建 Release）
+#    - push tag v*.*.*（版本号以 VERSION 文件为准）
+#
+#  产物：GitHub Release 中的
+#    - smsatbox-v{version}.apk
+#    - smsatbox-v{version}.exe
+#
+#  版本覆盖规则：同版本 Tag 覆盖原有附件，不同版本新建 Release。
+#
+#  ⚠️ 本流水线**不包含 ESP32 固件**，固件走 docker-build.yml 与 OTA 通道。
+# ============================================================================
+
+on:
+  push:
+    branches: [main, master]
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      force_recreate:
+        description: "强制重建 Release（即使同版本已存在）"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ═══════════════════════════════════════════════════════════════
+  # 1. 读取版本号，决定发布策略
+  # ═══════════════════════════════════════════════════════════════
+  prepare:
+    name: 读取版本号
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.ver.outputs.version }}
+      version_code: ${{ steps.ver.outputs.version_code }}
+      tag: ${{ steps.ver.outputs.tag }}
+      release_exists: ${{ steps.check.outputs.exists }}
+      strategy: ${{ steps.decide.outputs.strategy }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 读取版本号
+        id: ver
+        run: |
+          chmod +x scripts/version.sh
+          ./scripts/version.sh validate
+          VERSION="$(./scripts/version.sh name)"
+          CODE="$(./scripts/version.sh code)"
+          TAG="$(./scripts/version.sh tag)"
+          echo "version=$VERSION"     >> "$GITHUB_OUTPUT"
+          echo "version_code=$CODE"   >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"             >> "$GITHUB_OUTPUT"
+          echo "版本: $VERSION (code=$CODE, tag=$TAG)"
+
+      - name: 检查该版本 Release 是否已存在
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ steps.ver.outputs.tag }}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release $TAG 已存在，将覆盖上传"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release $TAG 不存在，将新建"
+          fi
+
+      - name: 决定发布策略
+        id: decide
+        run: |
+          FORCE="${{ github.event.inputs.force_recreate }}"
+          # 同版本已存在 → overwrite（覆盖附件，更新说明）
+          # 同版本不存在 → create（新建 Release）
+          if [ "${{ steps.check.outputs.exists }}" = "true" ] || [ "$FORCE" = "true" ]; then
+            if [ "${{ steps.check.outputs.exists }}" = "true" ]; then
+              echo "strategy=overwrite" >> "$GITHUB_OUTPUT"
+              echo "::notice::策略: 覆盖 v${{ steps.ver.outputs.version }}"
+            else
+              echo "strategy=create" >> "$GITHUB_OUTPUT"
+              echo "::notice::策略: 新建 v${{ steps.ver.outputs.version }}"
+            fi
+          else
+            echo "strategy=create" >> "$GITHUB_OUTPUT"
+            echo "::notice::策略: 新建 v${{ steps.ver.outputs.version }}"
+          fi
+
+  # ═══════════════════════════════════════════════════════════════
+  # 2. 构建 Android APK（在 Runner 上打包，不在本地打包）
+  # ═══════════════════════════════════════════════════════════════
+  build-apk:
+    name: 构建 APK
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # 说明：不使用 android-actions/setup-android，
+      # 新版 sdkmanager 已移除 `tools` 包，会导致 "Failed to find package 'tools'"。
+      # ubuntu-latest runner 已预装完整 Android SDK，这里只补齐所需组件。
+      - name: 准备 Android SDK
+        run: |
+          SDK="${ANDROID_HOME:-/usr/local/lib/android/sdk}"
+          echo "ANDROID_HOME=$SDK" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=$SDK" >> "$GITHUB_ENV"
+
+          SDKMGR="$(ls -1 "$SDK"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -n1)"
+          if [ -z "$SDKMGR" ]; then
+            echo "::warning::未找到 sdkmanager，依赖 runner 预装的 SDK"
+          else
+            echo "sdkmanager: $SDKMGR"
+            yes | "$SDKMGR" --licenses > /dev/null 2>&1 || true
+            "$SDKMGR" "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || \
+              echo "::warning::SDK 组件安装有警告，继续尝试构建"
+          fi
+
+          echo "已安装平台："; ls "$SDK/platforms" 2>/dev/null || true
+          echo "已安装 build-tools："; ls "$SDK/build-tools" 2>/dev/null || true
+
+      - name: 写入版本号
+        working-directory: android
+        run: |
+          ../scripts/version.sh write-gradle .
+
+      - name: 生成签名密钥（保证升级可覆盖安装）
+        working-directory: android
+        run: |
+          mkdir -p keystore
+          if [ ! -f keystore/smsatbox.jks ]; then
+            keytool -genkeypair \
+              -keystore keystore/smsatbox.jks \
+              -storetype JKS \
+              -storepass smsatbox \
+              -keypass smsatbox \
+              -alias smsatbox \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 36500 \
+              -dname "CN=SMSATBOX, OU=Dev, O=beibing173, L=Unknown, ST=Unknown, C=CN"
+          fi
+
+      - name: 缓存 Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android/**/*.gradle*') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: 构建 Release APK
+        working-directory: android
+        run: |
+          # 不依赖 gradle wrapper，直接安装 Gradle，避免仓库内 jar 版本问题
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip -O /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /opt
+          export PATH="/opt/gradle-8.9/bin:$PATH"
+          gradle --version
+          gradle :app:assembleRelease --no-daemon --stacktrace
+
+      - name: 定位并重命名 APK
+        id: apk
+        run: |
+          APK="$(find android/app/build/outputs/apk/release -name '*.apk' | head -n1)"
+          if [ -z "$APK" ]; then
+            echo "::error::未找到 APK 产物"
+            ls -R android/app/build/outputs || true
+            exit 1
+          fi
+          mkdir -p dist
+          OUT="dist/smsatbox-v${{ needs.prepare.outputs.version }}.apk"
+          cp "$APK" "$OUT"
+          echo "path=$OUT" >> "$GITHUB_OUTPUT"
+          ls -lh "$OUT"
+
+      - name: 上传 APK 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk
+          path: ${{ steps.apk.outputs.path }}
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════
+  # 3. 构建 Windows EXE（在 Runner 上打包）
+  # ═══════════════════════════════════════════════════════════════
+  build-exe:
+    name: 构建 EXE
+    runs-on: windows-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: 构建单文件 EXE
+        shell: pwsh
+        working-directory: windows
+        run: |
+          $version = "${{ needs.prepare.outputs.version }}"
+          Write-Host "构建版本: $version"
+
+          dotnet restore SmsatBox.sln
+          dotnet publish SmsatBox.Desktop/SmsatBox.Desktop.csproj `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -p:Version=$version `
+            -p:AssemblyVersion="$version.0" `
+            -p:FileVersion="$version.0" `
+            -o ../dist/exe
+
+          if (-not (Test-Path "../dist/exe/SmsatBox.exe")) {
+            Write-Error "未找到 EXE 产物"
+            Get-ChildItem -Recurse ../dist | Select-Object FullName
+            exit 1
+          }
+
+      - name: 重命名并校验
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item "dist/exe/SmsatBox.exe" "dist/smsatbox-v${{ needs.prepare.outputs.version }}.exe"
+          Get-Item "dist/smsatbox-v${{ needs.prepare.outputs.version }}.exe" |
+            Select-Object Name, @{N='SizeMB';E={[math]::Round($_.Length/1MB,2)}}
+
+      - name: 上传 EXE 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: exe
+          path: dist/smsatbox-v${{ needs.prepare.outputs.version }}.exe
+          retention-days: 7
+
+  # ═══════════════════════════════════════════════════════════════
+  # 4. 发布 Release
+  # ═══════════════════════════════════════════════════════════════
+  release:
+    name: 发布 Release
+    runs-on: ubuntu-latest
+    needs: [prepare, build-apk, build-exe]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 下载全部产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: 整理产物
+        run: |
+          mkdir -p release-assets
+          find artifacts -type f \( -name '*.apk' -o -name '*.exe' \) \
+            -exec cp {} release-assets/ \;
+          echo "=== 待发布文件 ==="
+          ls -lh release-assets/
+
+      - name: 计算校验和
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt 2>/dev/null || true
+          cat SHA256SUMS.txt || true
+
+      - name: 生成 Release 说明
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          VERSION_CODE: ${{ needs.prepare.outputs.version_code }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          base="https://github.com/${REPO}/releases/download/${TAG}"
+
+          PREV="$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo '')"
+          if [ -n "$PREV" ]; then
+            COMPARE="https://github.com/${REPO}/compare/${PREV}...${TAG}"
+            PREV_LINE="对比上次发布：[${PREV} → ${TAG}](${COMPARE})"
+            LOG_RANGE="${PREV}..HEAD"
+          else
+            PREV_LINE="首次发布"
+            LOG_RANGE="HEAD"
+          fi
+
+          {
+            echo "## SMSATBOX v${VERSION}"
+            echo ""
+            echo "\`versionName\` **${VERSION}** · \`versionCode\` **${VERSION_CODE}**"
+            echo ""
+            echo "${PREV_LINE}"
+            echo ""
+            echo "### 本次变更"
+            echo ""
+            # 转义 @ 避免被 GitHub 误渲染成用户提及
+            git log ${LOG_RANGE} --pretty=format:"- %s (%h)" --no-merges | head -n 40 | sed 's/@/＠/g' || true
+            echo ""
+            echo ""
+            echo "---"
+            echo ""
+            echo "## 下载"
+            echo ""
+            echo "| 平台 | 文件 | 说明 |"
+            echo "| --- | --- | --- |"
+            echo "| 📱 **Android** | [smsatbox-v${VERSION}.apk](${base}/smsatbox-v${VERSION}.apk) | 手机装这个 |"
+            echo "| 🖥️ **Windows** | [smsatbox-v${VERSION}.exe](${base}/smsatbox-v${VERSION}.exe) | 单文件，双击即用 |"
+            echo ""
+            echo "> 两端均内嵌独立升级：启动后在「设置」中检查更新，"
+            echo "> 直连 GitHub Release API 下载，**不经过 Server 中转**。"
+            echo ""
+            echo "---"
+            echo ""
+            echo "## 关于本项目"
+            echo ""
+            echo "短信 / 未接来电 多卡提醒盒子："
+            echo "ESP32-S3 硬件端接双 4G 模组，短信与来电经云端中转平台推送到手机与桌面。"
+            echo ""
+            echo "- **边缘极简**：设备只持有一个 Device_Token，不存任何用户凭据"
+            echo "- **鉴权隔离**：用户、权限、卡槽可见性全部由 Server 数据库裁决"
+            echo "- **双轨服务**：设备既是局域网 Web 服务器，也是公网平台客户端"
+            echo ""
+            echo "<details>"
+            echo "<summary>文件校验（SHA256）</summary>"
+            echo ""
+            echo '```'
+            cat release-assets/SHA256SUMS.txt 2>/dev/null || echo "（未生成）"
+            echo '```'
+            echo ""
+            echo "</details>"
+          } > RELEASE_BODY.md
+
+          echo "=== Release 说明 ==="
+          cat RELEASE_BODY.md
+
+      - name: 新建 Release
+        if: needs.prepare.outputs.strategy == 'create'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ needs.prepare.outputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --title "SMSATBOX v${{ needs.prepare.outputs.version }}" \
+            --notes-file RELEASE_BODY.md \
+            --latest \
+            release-assets/*
+
+      - name: 覆盖已存在的 Release
+        if: needs.prepare.outputs.strategy == 'overwrite'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          # 先删旧资产，避免同名冲突
+          gh release view "$TAG" --repo "${{ github.repository }}" --json assets \
+            -q '.assets[].name' | while read -r name; do
+              [ -n "$name" ] && gh release delete-asset "$TAG" "$name" \
+                --repo "${{ github.repository }}" --yes || true
+            done
+          gh release edit "$TAG" \
+            --repo "${{ github.repository }}" \
+            --title "SMSATBOX v${{ needs.prepare.outputs.version }}" \
+            --notes-file RELEASE_BODY.md \
+            --latest
+          gh release upload "$TAG" release-assets/* \
+            --repo "${{ github.repository }}" --clobber
+
+      - name: 发布结果
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ needs.prepare.outputs.tag }}"
+          URL="$(gh release view "$TAG" --repo "${{ github.repository }}" --json url -q .url)"
+          echo "::notice::Release 已发布: $URL"
+          {
+            echo "### Release 已发布"
+            echo ""
+            echo "**版本**: v${{ needs.prepare.outputs.version }} (code ${{ needs.prepare.outputs.version_code }})"
+            echo "**策略**: ${{ needs.prepare.outputs.strategy }}"
+            echo ""
+            echo "**地址**: $URL"
+          } >> "$GITHUB_STEP_SUMMARY"

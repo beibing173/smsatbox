@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+local.properties
+*.iml
+.idea/
+
+# 签名密钥（CI 会动态生成；切勿提交到仓库）
+keystore/
+*.jks
+*.keystore
+
+# 版本文件由 scripts/version.sh 生成
+version.properties
+
+# 系统
+.DS_Store
+Thumbs.db
+captures/

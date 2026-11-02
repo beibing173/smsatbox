@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SMSATBOX</string>
+    <string name="app_subtitle">短信 / 未接来电 多卡提醒盒子</string>
+
+    <!-- 底部导航 -->
+    <string name="nav_messages">消息</string>
+    <string name="nav_devices">设备</string>
+    <string name="nav_settings">设置</string>
+
+    <!-- 登录 -->
+    <string name="login_title">登录中转平台</string>
+    <string name="login_server_hint">公网中转平台地址，例如 https://sms.example.com</string>
+    <string name="login_token_hint">访问 Token</string>
+    <string name="login_button">登 录</string>
+    <string name="login_verifying">验证中…</string>
+
+    <!-- 消息 -->
+    <string name="messages_title">消息总览</string>
+    <string name="empty_messages">还没有消息\n设备联机并上报后会出现在这里</string>
+    <string name="copy_code">复制验证码</string>
+    <string name="copied">已复制</string>
+    <string name="refresh">刷新</string>
+
+    <!-- 设备 -->
+    <string name="devices_title">设备状态</string>
+    <string name="empty_devices">暂无设备</string>
+
+    <!-- 设置 -->
+    <string name="settings_title">设置</string>
+    <string name="settings_server">中转平台地址</string>
+    <string name="settings_token">访问 Token</string>
+    <string name="settings_theme">外观主题</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_check_update">检查更新</string>
+    <string name="settings_logout">退出登录</string>
+    <string name="settings_notifications">消息通知</string>
+    <string name="save">保存</string>
+
+    <!-- 升级 -->
+    <string name="update_checking">正在检查更新…</string>
+    <string name="update_latest">已是最新版本</string>
+    <string name="update_available">发现新版本</string>
+    <string name="update_download">下载安装</string>
+    <string name="update_later">稍后</string>
+    <string name="update_downloading">下载中…</string>
+    <string name="update_failed">更新失败</string>
+
+    <!-- 通知渠道 -->
+    <string name="channel_messages">消息提醒</string>
+    <string name="channel_messages_desc">短信与未接来电的实时提醒</string>
+</resources>

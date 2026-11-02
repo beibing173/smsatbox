@@ -1,0 +1,140 @@
+<UserControl x:Class="SmsatBox.Desktop.Views.Pages.DevicesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:core="clr-namespace:SmsatBox.Desktop.Core"
+             FontFamily="{DynamicResource Font.Ui}"
+             TextOptions.TextFormattingMode="Ideal"
+             UseLayoutRounding="True">
+
+    <UserControl.Resources>
+        <core:ZeroToVisibleConverter x:Key="ZeroToVisible" />
+        <!-- 卡槽条目 -->
+        <DataTemplate x:Key="SlotItem">
+            <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="9" Padding="12,9" Margin="0,0,0,7">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0" Width="26" Height="26" CornerRadius="7"
+                            Background="{DynamicResource Brush.AccentSoft}" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding SlotIndex}" FontSize="12" FontWeight="Bold"
+                                   Foreground="{DynamicResource Brush.Accent}"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+
+                    <StackPanel Grid.Column="1" Margin="11,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding NumberLabel}" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Brush.Text}" />
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                            <TextBlock Text="{Binding CarrierLabel}" Style="{StaticResource Text.Muted}" FontSize="11" />
+                            <TextBlock Text=" · " Style="{StaticResource Text.Muted}" FontSize="11" />
+                            <TextBlock Text="{Binding PlanName}" Style="{StaticResource Text.Muted}" FontSize="11" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding SignalStars}" FontFamily="Segoe UI Symbol" FontSize="12"
+                                   Foreground="{DynamicResource Brush.Success}" HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding SignalLabel}" Style="{StaticResource Text.Muted}" FontSize="10.5"
+                                   HorizontalAlignment="Right" Margin="0,2,0,0" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <!-- 设备卡片 -->
+        <DataTemplate x:Key="DeviceCard">
+            <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                <StackPanel>
+                    <!-- 头部 -->
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border Grid.Column="0" Width="38" Height="38" CornerRadius="10"
+                                Background="{DynamicResource Brush.SurfaceAlt}" VerticalAlignment="Top">
+                            <TextBlock Text="📻" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+
+                        <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding NameLabel}" Style="{StaticResource Text.H2}" />
+                                <Border CornerRadius="6" Padding="7,1" Margin="9,0,0,0" VerticalAlignment="Center"
+                                        Background="{DynamicResource Brush.AccentSoft}">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="{Binding OnlineBadge}" FontSize="9"
+                                                   Foreground="{DynamicResource Brush.Success}"
+                                                   VerticalAlignment="Center" Margin="0,0,4,0" />
+                                        <TextBlock Text="{Binding StatusLabel}" FontSize="10.5"
+                                                   Foreground="{DynamicResource Brush.Success}" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                            <!-- Run.Text 的默认绑定模式是 TwoWay，这里必须显式 OneWay，
+                                 否则会因只读计算属性抛 XamlParseException。 -->
+                            <TextBlock Style="{StaticResource Text.Muted}" Margin="0,4,0,0">
+                                <Run Text="{Binding NetModeLabel, Mode=OneWay}" />
+                                <Run Text=" · IP " />
+                                <Run Text="{Binding IpLabel, Mode=OneWay}" />
+                                <Run Text=" · 固件 " />
+                                <Run Text="{Binding FirmwareVersion, Mode=OneWay}" />
+                            </TextBlock>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding SlotCountLabel}" Style="{StaticResource Text.Sub}"
+                                       HorizontalAlignment="Right" />
+                            <TextBlock Text="{Binding LastSeenLabel}" Style="{StaticResource Text.Muted}"
+                                       HorizontalAlignment="Right" Margin="0,3,0,0"
+                                       ToolTip="{Binding LastSeenExact}" />
+                        </StackPanel>
+                    </Grid>
+
+                    <Border Height="1" Background="{DynamicResource Brush.Border}" Margin="0,13,0,11" />
+
+                    <!-- 卡槽 -->
+                    <ItemsControl ItemsSource="{Binding Slots}" ItemTemplate="{StaticResource SlotItem}" />
+
+                    <TextBlock Text="该设备未配置卡槽" Style="{StaticResource Text.Muted}"
+                               Visibility="{Binding Slots.Count, Converter={StaticResource ZeroToVisible}}" />
+                </StackPanel>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="22,18,22,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <Grid Grid.Row="0">
+            <StackPanel>
+                <TextBlock Text="设备状态" Style="{StaticResource Text.H1}" />
+                <TextBlock x:Name="SubtitleText" Style="{StaticResource Text.Muted}" Margin="0,4,0,0" />
+            </StackPanel>
+            <Button Style="{StaticResource Btn.Base}" Content="刷新" HorizontalAlignment="Right"
+                    VerticalAlignment="Center" Click="OnRefreshClick" />
+        </Grid>
+
+        <Grid Grid.Row="1" Margin="0,16,0,0">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ItemsControl x:Name="DeviceList" ItemTemplate="{StaticResource DeviceCard}" Margin="0,0,8,0" />
+            </ScrollViewer>
+
+            <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center">
+                <TextBlock Text="📡" FontSize="44" HorizontalAlignment="Center" Opacity="0.6" />
+                <TextBlock Text="暂无设备" Style="{StaticResource Text.H2}" HorizontalAlignment="Center"
+                           Margin="0,12,0,0" />
+                <TextBlock Text="在 Web 管理端添加设备后，这里会显示在线状态与卡槽信息"
+                           Style="{StaticResource Text.Muted}" HorizontalAlignment="Center" Margin="0,6,0,0" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

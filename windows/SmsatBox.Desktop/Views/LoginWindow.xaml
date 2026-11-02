@@ -1,0 +1,87 @@
+<Window x:Class="SmsatBox.Desktop.Views.LoginWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="SMSATBOX · 登录"
+        Width="520" Height="640"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="{DynamicResource Brush.WindowBg}"
+        FontFamily="{DynamicResource Font.Ui}"
+        TextOptions.TextFormattingMode="Ideal"
+        UseLayoutRounding="True">
+
+    <Grid Margin="36,28,36,24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- 品牌 -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
+            <Border Width="44" Height="44" CornerRadius="12" Background="{DynamicResource Brush.Accent}">
+                <TextBlock Text="📨" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Margin="14,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="SMSATBOX" Style="{StaticResource Text.H1}" />
+                <TextBlock Text="短信 / 未接来电 多卡提醒盒子" Style="{StaticResource Text.Muted}" Margin="0,2,0,0" />
+            </StackPanel>
+        </StackPanel>
+
+        <!-- 说明 -->
+        <Border Grid.Row="1" Style="{StaticResource Card}" Margin="0,26,0,0" Padding="16,14">
+            <StackPanel>
+                <TextBlock Text="连接公网中转平台" Style="{StaticResource Text.H2}" />
+                <TextBlock Style="{StaticResource Text.Muted}" Margin="0,6,0,0" TextWrapping="Wrap"
+                           Text="填写你的 SMSATBOX 中转平台地址（公网可访问）与客户端 Token。凭据只保存在本机 %APPDATA%\SMSATBOX\config.json。" />
+            </StackPanel>
+        </Border>
+
+        <!-- 表单 -->
+        <StackPanel Grid.Row="2" Margin="0,24,0,0">
+            <TextBlock Text="公网中转平台地址" Style="{StaticResource Text.Sub}" Margin="2,0,0,6" />
+            <TextBox x:Name="ServerTextBox" Style="{StaticResource Input}"
+                     ToolTip="例如 https://smsat.example.com 或 http://1.2.3.4:8000"
+                     KeyDown="OnServerKeyDown" />
+            <TextBlock Style="{StaticResource Text.Muted}" Margin="2,6,0,0" TextWrapping="Wrap"
+                       Text="不填 /api/v1 也可以，程序会自动补全。支持 http 与 https。" />
+
+            <TextBlock Text="Token" Style="{StaticResource Text.Sub}" Margin="2,18,0,6" />
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <PasswordBox x:Name="TokenPasswordBox" Style="{StaticResource Input.Password}" />
+                <TextBox x:Name="TokenTextBox" Style="{StaticResource Input}" Visibility="Collapsed" />
+                <Button Grid.Column="1" x:Name="ToggleTokenButton" Style="{StaticResource Btn.Ghost}"
+                        Content="👁" Margin="6,0,0,0" Click="OnToggleTokenClick"
+                        ToolTip="显示 / 隐藏 Token" />
+            </Grid>
+            <TextBlock Style="{StaticResource Text.Muted}" Margin="2,6,0,0" TextWrapping="Wrap"
+                       Text="Token 在 Web 管理端「设置 → 客户端令牌」生成，只需填写一次。" />
+
+            <StackPanel Orientation="Horizontal" Margin="0,16,0,0">
+                <CheckBox x:Name="RememberCheckBox" IsChecked="True" VerticalAlignment="Center"
+                          Foreground="{DynamicResource Brush.TextSub}" Content="记住凭据（保存到本机）" />
+            </StackPanel>
+
+            <Border x:Name="ErrorBorder" Visibility="Collapsed" Margin="0,18,0,0"
+                    CornerRadius="9" Padding="12,10" Background="{DynamicResource Brush.AccentSoft}">
+                <TextBlock x:Name="ErrorText" Foreground="{DynamicResource Brush.Danger}"
+                           FontSize="12.5" TextWrapping="Wrap" />
+            </Border>
+        </StackPanel>
+
+        <!-- 底部 -->
+        <StackPanel Grid.Row="3">
+            <Button x:Name="LoginButton" Style="{StaticResource Btn.Primary}" Content="验证并登录"
+                    Height="44" HorizontalAlignment="Stretch" Click="OnLoginClick" />
+            <Button Style="{StaticResource Btn.Ghost}" Content="退出" Margin="0,8,0,0"
+                    HorizontalAlignment="Center" Click="OnExitClick" />
+            <TextBlock x:Name="VersionText" Style="{StaticResource Text.Muted}"
+                       HorizontalAlignment="Center" Margin="0,14,0,0" />
+        </StackPanel>
+    </Grid>
+</Window>

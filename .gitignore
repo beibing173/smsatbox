@@ -1,0 +1,60 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ---- 运行数据 ----
+server/data/
+data/
+*.db
+*.db-wal
+*.db-shm
+*.bin
+
+# ---- 环境 ----
+.env
+!.env.example
+
+# ---- Android ----
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/keystore/
+android/*.jks
+android/*.keystore
+android/version.properties
+
+# ---- ESP32 / PlatformIO ----
+esp32/.pio/
+esp32/.pio-*
+.pio-venv/
+.pio/
+*.pio.ini.bak
+
+# ---- Windows / .NET ----
+windows/**/bin/
+windows/**/obj/
+windows/dist/
+dist/
+*.user
+*.suo
+
+# ---- 前端/构建产物 ----
+node_modules/
+**/dist/
+
+# ---- 系统 ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
+
+# ---- 本地截图 / 临时 ----
+.shots/

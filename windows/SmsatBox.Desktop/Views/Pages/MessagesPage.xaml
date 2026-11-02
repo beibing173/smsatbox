@@ -1,0 +1,190 @@
+<UserControl x:Class="SmsatBox.Desktop.Views.Pages.MessagesPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             FontFamily="{DynamicResource Font.Ui}"
+             TextOptions.TextFormattingMode="Ideal"
+             UseLayoutRounding="True">
+
+    <UserControl.Resources>
+        <!-- 消息卡片模板 -->
+        <DataTemplate x:Key="MessageCard">
+            <Border Style="{StaticResource Card}" Margin="0,0,0,10" Padding="16,13"
+                    Opacity="{Binding RowOpacity}"
+                    MouseLeftButtonUp="OnCardClick"
+                    Cursor="Hand">
+                <Border.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="标记为已读" Click="OnMarkReadMenuClick" />
+                        <MenuItem Header="复制验证码" Click="OnCopyCodeMenuClick" />
+                        <MenuItem Header="复制全文" Click="OnCopyContentMenuClick" />
+                    </ContextMenu>
+                </Border.ContextMenu>
+
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 类型标记 -->
+                    <Border Grid.Column="0" Width="4" CornerRadius="2" Margin="0,2,14,2"
+                            Background="{DynamicResource Brush.Accent}" />
+
+                    <StackPanel Grid.Column="1">
+                        <!-- 第一行：发送者 + 标签 -->
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Sender}" FontSize="14.5" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Brush.Text}"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="320" />
+                            <Border CornerRadius="6" Padding="7,1" Margin="9,0,0,0"
+                                    Background="{DynamicResource Brush.AccentSoft}" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding KindLabel}" FontSize="10.5"
+                                           Foreground="{DynamicResource Brush.Accent}" />
+                            </Border>
+                            <Border CornerRadius="6" Padding="7,1" Margin="6,0,0,0"
+                                    Background="{DynamicResource Brush.SurfaceAlt}" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding SlotLabel}" FontSize="10.5"
+                                           Foreground="{DynamicResource Brush.TextSub}" />
+                            </Border>
+                            <TextBlock Text="{Binding UnreadBadge}" Margin="8,0,0,0" FontSize="11"
+                                       Foreground="{DynamicResource Brush.Danger}" VerticalAlignment="Center" />
+                        </StackPanel>
+
+                        <!-- 验证码：整块可点击复制 -->
+                        <Border x:Name="CodePanel" Margin="0,9,0,0" Visibility="Collapsed">
+                            <Button Style="{StaticResource Btn.Code}" Click="OnCopyCodeClick"
+                                    HorizontalAlignment="Left" ToolTip="点击复制验证码">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="{Binding Code}" Style="{StaticResource Text.Code}" />
+                                    <TextBlock Text="复制" FontSize="11" Margin="10,0,0,0"
+                                               Foreground="{DynamicResource Brush.TextSub}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Button>
+                        </Border>
+
+                        <!-- 正文 -->
+                        <TextBlock Text="{Binding ContentPreview}" FontFamily="{DynamicResource Font.Ui}"
+                                   FontSize="12.8" Foreground="{DynamicResource Brush.TextSub}"
+                                   TextWrapping="Wrap" Margin="0,8,0,0" MaxHeight="42" />
+                    </StackPanel>
+
+                    <!-- 右侧：时间 + 卡号 -->
+                    <StackPanel Grid.Column="2" Margin="14,0,0,0" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding TimeLocal}" Style="{StaticResource Text.Muted}"
+                                   HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding TimeAgo}" Style="{StaticResource Text.Muted}"
+                                   HorizontalAlignment="Right" Margin="0,4,0,0" FontSize="11" />
+                        <TextBlock Text="{Binding NumberLabel}" Style="{StaticResource Text.Muted}"
+                                   HorizontalAlignment="Right" Margin="0,4,0,0" FontSize="11" />
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding HasCode}" Value="True">
+                    <Setter TargetName="CodePanel" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid Margin="22,18,22,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 标题行 -->
+        <Grid Grid.Row="0">
+            <StackPanel>
+                <TextBlock Text="消息列表" Style="{StaticResource Text.H1}" />
+                <TextBlock x:Name="SubtitleText" Style="{StaticResource Text.Muted}" Margin="0,4,0,0" />
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <Button x:Name="MarkAllReadButton" Style="{StaticResource Btn.Base}" Content="全部标为已读"
+                        Click="OnMarkAllReadClick" Margin="0,0,8,0" />
+                <Button x:Name="RefreshButton" Style="{StaticResource Btn.Base}" Content="刷新"
+                        Click="OnRefreshClick" />
+            </StackPanel>
+        </Grid>
+
+        <!-- 统计卡 -->
+        <Grid Grid.Row="1" Margin="0,16,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="12" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Style="{StaticResource Card}" Padding="14,11">
+                <StackPanel>
+                    <TextBlock Text="总消息" Style="{StaticResource Text.Muted}" />
+                    <TextBlock x:Name="TotalText" Text="0" Style="{StaticResource Text.H1}" Margin="0,3,0,0" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Style="{StaticResource Card}" Padding="14,11">
+                <StackPanel>
+                    <TextBlock Text="未读" Style="{StaticResource Text.Muted}" />
+                    <TextBlock x:Name="UnreadText" Text="0" Style="{StaticResource Text.H1}" Margin="0,3,0,0"
+                               Foreground="{DynamicResource Brush.Danger}" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="4" Style="{StaticResource Card}" Padding="14,11">
+                <StackPanel>
+                    <TextBlock Text="今日" Style="{StaticResource Text.Muted}" />
+                    <TextBlock x:Name="TodayText" Text="0" Style="{StaticResource Text.H1}" Margin="0,3,0,0" />
+                </StackPanel>
+            </Border>
+            <Border Grid.Column="6" Style="{StaticResource Card}" Padding="14,11">
+                <StackPanel>
+                    <TextBlock Text="验证码" Style="{StaticResource Text.Muted}" />
+                    <TextBlock x:Name="CodesText" Text="0" Style="{StaticResource Text.H1}" Margin="0,3,0,0"
+                               Foreground="{DynamicResource Brush.Accent}" />
+                </StackPanel>
+            </Border>
+        </Grid>
+
+        <!-- 消息列表 -->
+        <Grid Grid.Row="2" Margin="0,14,0,0">
+            <ListBox x:Name="MessageList" Background="Transparent" BorderThickness="0"
+                     ItemTemplate="{StaticResource MessageCard}"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     HorizontalContentAlignment="Stretch">
+                <ListBox.ItemContainerStyle>
+                    <Style TargetType="ListBoxItem">
+                        <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                        <Setter Property="Padding" Value="0" />
+                        <Setter Property="Margin" Value="0" />
+                        <Setter Property="Background" Value="Transparent" />
+                        <Setter Property="Template">
+                            <Setter.Value>
+                                <ControlTemplate TargetType="ListBoxItem">
+                                    <ContentPresenter />
+                                </ControlTemplate>
+                            </Setter.Value>
+                        </Setter>
+                    </Style>
+                </ListBox.ItemContainerStyle>
+            </ListBox>
+
+            <!-- 空状态 -->
+            <StackPanel x:Name="EmptyPanel" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Visibility="Collapsed">
+                <TextBlock Text="📭" FontSize="44" HorizontalAlignment="Center" Opacity="0.6" />
+                <TextBlock Text="暂无消息" Style="{StaticResource Text.H2}" HorizontalAlignment="Center"
+                           Margin="0,12,0,0" />
+                <TextBlock Text="硬件端收到短信或未接来电后会实时出现在这里"
+                           Style="{StaticResource Text.Muted}" HorizontalAlignment="Center" Margin="0,6,0,0" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

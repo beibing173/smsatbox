@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_card"
+    android:padding="13dp"
+    android:layout_marginBottom="9dp">
+
+    <!-- 第一行：类型标签 + 卡槽 + 发送者 + 未读点 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/kindTag"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="短信"
+            android:textSize="10sp"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:background="@drawable/bg_tag" />
+
+        <TextView
+            android:id="@+id/slotTag"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="卡槽 1"
+            android:textSize="10sp"
+            android:textColor="@color/brand"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:layout_marginStart="6dp"
+            android:background="@drawable/bg_tag" />
+
+        <TextView
+            android:id="@+id/senderText"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="未知号码"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_0"
+            android:layout_marginStart="8dp"
+            android:maxLines="1"
+            android:ellipsize="end" />
+
+        <View
+            android:id="@+id/unreadDot"
+            android:layout_width="8dp"
+            android:layout_height="8dp"
+            android:background="@drawable/bg_dot_online" />
+    </LinearLayout>
+
+    <!-- 正文 -->
+    <TextView
+        android:id="@+id/bodyText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="13sp"
+        android:textColor="@color/text_1"
+        android:lineSpacingExtra="3dp"
+        android:layout_marginTop="7dp"
+        android:maxLines="4"
+        android:ellipsize="end" />
+
+    <!-- 验证码块 -->
+    <LinearLayout
+        android:id="@+id/codeChip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/bg_code_chip"
+        android:paddingStart="11dp"
+        android:paddingEnd="11dp"
+        android:paddingTop="5dp"
+        android:paddingBottom="5dp"
+        android:layout_marginTop="9dp"
+        android:clickable="true"
+        android:focusable="true">
+
+        <TextView
+            android:id="@+id/codeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="000000"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:textColor="@color/code_text"
+            android:letterSpacing="0.16"
+            android:fontFamily="monospace" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="⧉"
+            android:textSize="13sp"
+            android:textColor="@color/code_text"
+            android:layout_marginStart="7dp" />
+    </LinearLayout>
+
+    <!-- 底部：时间 + 操作 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginTop="9dp">
+
+        <TextView
+            android:id="@+id/timeText"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="11sp"
+            android:textColor="@color/text_2" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <TextView
+            android:id="@+id/copyButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="复制内容"
+            android:textSize="12sp"
+            android:textColor="@color/text_1"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp"
+            android:clickable="true"
+            android:focusable="true" />
+
+        <TextView
+            android:id="@+id/readButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="标为已读"
+            android:textSize="12sp"
+            android:textColor="@color/text_1"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="5dp"
+            android:paddingBottom="5dp"
+            android:clickable="true"
+            android:focusable="true" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 深色主题（默认） -->
+    <color name="bg_0">#070B14</color>
+    <color name="bg_1">#0B111D</color>
+    <color name="surface">#0D1626</color>
+    <color name="surface_2">#131E2E</color>
+    <color name="line">#1E2B40</color>
+    <color name="line_soft">#172235</color>
+
+    <color name="text_0">#E8F0FF</color>
+    <color name="text_1">#9FB0C9</color>
+    <color name="text_2">#64748B</color>
+
+    <color name="brand">#22D3EE</color>
+    <color name="brand_2">#6366F1</color>
+    <color name="ok">#34D399</color>
+    <color name="warn">#FBBF24</color>
+    <color name="danger">#F87171</color>
+
+    <color name="code_bg">#07222C</color>
+    <color name="code_line">#16808F</color>
+    <color name="code_text">#7FF0FF</color>
+
+    <color name="nav_unselected">#64748B</color>
+    <color name="nav_selected">#22D3EE</color>
+</resources>

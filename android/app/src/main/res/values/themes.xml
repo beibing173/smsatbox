@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <style name="Theme.SMSATBOX" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/brand</item>
+        <item name="colorSecondary">@color/brand_2</item>
+        <item name="android:colorBackground">@color/bg_0</item>
+        <item name="colorSurface">@color/surface</item>
+        <item name="colorOnSurface">@color/text_0</item>
+        <item name="colorOnBackground">@color/text_0</item>
+        <item name="android:statusBarColor">@color/bg_1</item>
+        <item name="android:navigationBarColor">@color/bg_1</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowBackground">@color/bg_0</item>
+    </style>
+
+    <style name="Theme.SMSATBOX.Light" parent="Theme.SMSATBOX">
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
+
+    <!-- 通用文字样式 -->
+    <style name="Text_Title">
+        <item name="android:textSize">19sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_0</item>
+    </style>
+
+    <style name="Text_Body">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/text_1</item>
+    </style>
+
+    <style name="Text_Caption">
+        <item name="android:textSize">12sp</item>
+        <item name="android:textColor">@color/text_2</item>
+    </style>
+
+    <style name="Card_Surface">
+        <item name="cardBackgroundColor">@color/surface</item>
+        <item name="cardCornerRadius">14dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeColor">@color/line</item>
+        <item name="strokeWidth">1dp</item>
+    </style>
+
+    <style name="Button_Primary" parent="Widget.Material3.Button">
+        <item name="backgroundTint">@color/brand</item>
+        <item name="android:textColor">#FFFFFF</item>
+        <item name="cornerRadius">9dp</item>
+    </style>
+
+    <style name="Button_Ghost" parent="Widget.Material3.Button.TextButton">
+        <item name="android:textColor">@color/text_1</item>
+    </style>
+
+    <!-- 统计卡片单元格 -->
+    <style name="StatCell">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/bg_card</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
+        <item name="android:paddingTop">9dp</item>
+        <item name="android:paddingBottom">9dp</item>
+        <item name="android:layout_marginStart">3dp</item>
+        <item name="android:layout_marginEnd">3dp</item>
+    </style>
+
+    <style name="StatLabel">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">@color/text_2</item>
+    </style>
+
+    <style name="StatValue">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">19sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/text_0</item>
+        <item name="android:layout_marginTop">2dp</item>
+    </style>
+
+</resources>

@@ -1,0 +1,65 @@
+# ==============================================================================
+# SMSATBOX Server · docker compose 部署
+#
+#   最简用法（不建 .env 也能跑，用下面的默认值）：
+#     docker compose up -d
+#
+#   推荐用法（生产必须改密码）：
+#     1. copy .env.example .env      (Windows)
+#        cp .env.example .env        (Linux/macOS)
+#     2. 修改 .env 里的 ADMIN_PASSWORD / SECRET_KEY
+#     3. docker compose up -d
+#     4. 打开 http://<服务器IP>:8080
+#
+#   版本覆盖规则：镜像 tag 同名覆盖，不同版本新建。
+#   拉最新镜像升级： docker compose pull && docker compose up -d
+# ==============================================================================
+services:
+  server:
+    image: beibing173/smsatbox-server:${IMAGE_TAG:-1.0.0}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smsatbox-server
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-8080}:8080"
+    environment:
+      # ---- 容器内路径与区域 ----
+      DATA_DIR: /data
+      TZ: Asia/Shanghai
+      # ---- 安全：务必通过 .env 或 shell 环境变量覆盖 ----
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123456}
+      ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-超级管理员}
+      SECRET_KEY: ${SECRET_KEY:-}
+      TOKEN_TTL_MINUTES: ${TOKEN_TTL_MINUTES:-720}
+      # ---- 服务 ----
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      DEVICE_OFFLINE_SECONDS: ${DEVICE_OFFLINE_SECONDS:-90}
+      MAX_FIRMWARE_MB: ${MAX_FIRMWARE_MB:-16}
+      # ---- 维度二：协同升级 ----
+      SERVER_IMAGE: ${SERVER_IMAGE:-beibing173/smsatbox-server}
+      SERVER_UPGRADE_ENABLED: ${SERVER_UPGRADE_ENABLED:-false}
+      SERVER_UPGRADE_COMMAND: ${SERVER_UPGRADE_COMMAND:-}
+    volumes:
+      # SQLite 数据库 + 固件文件持久化，重建容器不丢数据
+      - smsatbox-data:/data
+      # 若要允许 ESP32 触发 Server 自升级，需放开下面这行并设 SERVER_UPGRADE_ENABLED=true
+      # 注意：挂载 docker.sock 等于给予容器宿主机 root 级控制权，请自行评估
+      # - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/v1/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  smsatbox-data:
+    driver: local

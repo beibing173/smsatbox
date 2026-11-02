@@ -1,0 +1,21 @@
+{
+  "name": "SMSATBOX 管理端",
+  "short_name": "SMSATBOX",
+  "version": "1.0.0",
+  "description": "短信 / 未接来电 多卡提醒盒子 · 云端中转平台",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#070b14",
+  "theme_color": "#0b111d",
+  "lang": "zh-CN",
+  "icons": [
+    {
+      "src": "/assets/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
