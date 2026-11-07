@@ -31,6 +31,11 @@ android/*.jks
 android/*.keystore
 android/version.properties
 
+# ---- 签名密钥 ----
+# 原始 keystore 不进仓库，但 base64 版本要进（CI 解码后保证签名一致）
+# APK 签名证书本身就是公开可见的，不是秘密
+!release-keys/smsatbox-keystore.b64
+
 # ---- ESP32 / PlatformIO ----
 esp32/.pio/
 esp32/.pio-*

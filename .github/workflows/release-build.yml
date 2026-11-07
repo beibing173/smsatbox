@@ -153,18 +153,27 @@ jobs:
           chmod +x scripts/version.sh
           bash scripts/version.sh sync
 
-      - name: 生成签名密钥
+      - name: 恢复固定签名密钥
         working-directory: android
         run: |
+          # ★ 关键：必须用**固定的**密钥，否则每次构建签名不同，
+          #    用户装过旧版后无法覆盖安装（报"签名不一致"）。
+          #    密钥以 base64 存于 release-keys/，不属于秘密——
+          #    Android 的 APK 签名证书本身就是公开可见的。
           mkdir -p keystore
-          if [ ! -f keystore/smsatbox.jks ]; then
-            keytool -genkeypair \
-              -keystore keystore/smsatbox.jks \
-              -storetype JKS \
-              -storepass smsatbox -keypass smsatbox \
-              -alias smsatbox -keyalg RSA -keysize 2048 -validity 36500 \
-              -dname "CN=SMSATBOX, OU=Dev, O=beibing173, L=Unknown, ST=Unknown, C=CN"
+          if [ -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" ]; then
+            echo "使用仓库 Secret 中的密钥"
+            echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore/smsatbox.jks
+          elif [ -f ../release-keys/smsatbox-keystore.b64 ]; then
+            echo "使用仓库内置的固定密钥"
+            base64 -d ../release-keys/smsatbox-keystore.b64 > keystore/smsatbox.jks
+          else
+            echo "::error::找不到签名密钥，无法保证覆盖安装"
+            exit 1
           fi
+
+          echo "密钥文件大小: $(stat -c%s keystore/smsatbox.jks) bytes"
+          keytool -list -keystore keystore/smsatbox.jks -storepass smsatbox | grep -E "Keystore type|SHA" || true
 
       - name: 缓存 Gradle
         uses: actions/cache@v4
