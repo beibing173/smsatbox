@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  SMSATBOX · 配置存储实现（Preferences / NVS）
 // ============================================================================
 #include "config_store.h"
@@ -66,7 +66,7 @@ bool save(const DeviceConfig& incoming) {
   String tokenPreview = s_cfg.deviceToken.length() > 12
                             ? s_cfg.deviceToken.substring(0, 8) + "..."
                             : String("(short)");
-  LOGI("配置已保存: ssid=%s server=%s token=%s", s_cfg.wifiSsid.c_str(),
+  LOGI("config saved: ssid=%s server=%s token=%s", s_cfg.wifiSsid.c_str(),
        s_cfg.serverUrl.c_str(), tokenPreview.c_str());
   return true;
 }
@@ -77,7 +77,7 @@ void clear() {
   s_prefs.end();
   s_cfg = DeviceConfig();
   s_loaded = true;
-  LOGW("配置已清空，将重新进入配网模式");
+  LOGW("config cleared, back to setup mode");
 }
 
 String normalizeServerUrl(const String& raw) {
