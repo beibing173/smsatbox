@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  SMSATBOX · 云端通信实现
 //  ---------------------------------------------------------------------------
 //  【安全原则】本文件只发送 Device_Token。用户密码、成员列表、权限逻辑
@@ -100,9 +100,9 @@ void begin() {
   const DeviceConfig& c = cfg::get();
   s_hasToken = c.deviceToken.length() > 0 && c.serverUrl.length() > 0;
   if (s_hasToken) {
-    LOGI("云端通信就绪: %s", c.serverUrl.c_str());
+    LOGI("cloud ready: %s", c.serverUrl.c_str());
   } else {
-    LOGW("云端配置不完整，通信暂不可用");
+    LOGW("cloud config incomplete");
   }
 }
 
@@ -174,19 +174,19 @@ bool reportStatus() {
     if (deserializeJson(in, resp) == DeserializationError::Ok) {
       const char* serverVer = in["server_version"] | "";
       if (strlen(serverVer) > 0 && strcmp(serverVer, SMSATBOX_VERSION) != 0) {
-        LOGW("Server 版本 %s 与固件 %s 不一致", serverVer, SMSATBOX_VERSION);
+        LOGW("server %s != fw %s", serverVer, SMSATBOX_VERSION);
       }
     }
     return true;
   }
-  LOGW("状态上报失败 code=%d", code);
+  LOGW("report failed code=%d", code);
   return false;
 }
 
 bool reportMessage(const char* kind, int slotIndex, const String& sender,
                    const String& content) {
   if (!s_hasToken || !net::online()) {
-    LOGW("网络不可用，短信暂存（离线队列未启用）");
+    LOGW("network down");
     return false;
   }
 
@@ -208,11 +208,11 @@ bool reportMessage(const char* kind, int slotIndex, const String& sender,
       const char* v = in["code"] | "";
       codeStr = v;
     }
-    LOGI("上报成功 slot=%d code=%s", slotIndex,
+    LOGI("report ok slot=%d code=%s", slotIndex,
          codeStr.length() ? codeStr.c_str() : "-");
     return true;
   }
-  LOGE("上报失败 code=%d", code);
+  LOGE("report failed code=%d", code);
   return false;
 }
 
@@ -251,7 +251,7 @@ bool reportCommandResult(int commandId, const char* status, const String& error)
   String path = String("/device/commands/") + commandId;
   String resp;
   int code = httpRequest(apiUrl(path.c_str()), "POST", body, &resp);
-  LOGI("指令 %d 结果回写 %s -> %d", commandId, status, code);
+  LOGI("cmd %d result %s -> %d", commandId, status, code);
   return code == 200;
 }
 
@@ -306,7 +306,7 @@ bool requestServerUpgrade(const String& targetVersion) {
 
   String resp;
   int code = httpRequest(apiUrl("/device/server-upgrade"), "POST", body, &resp);
-  LOGI("请求 Server 升级 -> %d", code);
+  LOGI("server upgrade req -> %d", code);
   return code == 200;
 }
 
