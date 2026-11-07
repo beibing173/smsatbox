@@ -28,6 +28,8 @@
 #define WIFI_RECHECK_MS (15 * 1000)
 // 4G 模组初始化重试间隔
 #define MODEM_RETRY_MS (20 * 1000)
+// 模组长期缺席后的慢速重试间隔（防呆：槽位空着也不刷屏，但永不放弃）
+#define RETRY_SLOW_MS (60 * 1000)
 // 串口行缓冲长度
 #define MODEM_LINE_BUFFER 320
 // 单条短信最大长度
@@ -45,18 +47,20 @@
 #define MODEM_COUNT 2
 
 // --- 卡槽 1：UART1（GPIO 15/16/17/18）---
+// 实测验证：TX=17 / RX=18 @115200 可正常收发 AT，收到 "OK"
 #define MODEM1_UART_NUM 1
 #define MODEM1_TX_PIN 17
 #define MODEM1_RX_PIN 18
 #define MODEM1_EN_PIN 16   // 模组电源使能（PWRKEY）
 #define MODEM1_RST_PIN 15  // 复位
 
-// --- 卡槽 2：UART2（GPIO 4/1）---
+// --- 卡槽 2：UART2（改用 UART2 的经典引脚 9/10）---
 // 说明：-1 表示该引脚未接线，固件会跳过对应的电平控制。
+//       若模组 BAT 与 EN 已硬件短接（常开机），EN 也应设为 -1。
 #define MODEM2_UART_NUM 2
-#define MODEM2_TX_PIN 4
-#define MODEM2_RX_PIN 1
-#define MODEM2_EN_PIN -1   // 未接 PWRKEY，模组上电即启动
+#define MODEM2_TX_PIN 9
+#define MODEM2_RX_PIN 10
+#define MODEM2_EN_PIN -1   // BAT-EN 已短接，无需 GPIO 控制
 #define MODEM2_RST_PIN -1  // 未接复位脚
 
 // 状态指示灯（板载 RGB，共阴）
