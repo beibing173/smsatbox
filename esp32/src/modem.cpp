@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  SMSATBOX · ML307A-DSLN 驱动实现
 //  ---------------------------------------------------------------------------
 //  设计要点：
@@ -81,7 +81,7 @@ void Modem::begin() {
       Serial2.begin(SMSATBOX_SERIAL_BAUD, SERIAL_8N1, rxPin_, txPin_);
       break;
     default:
-      LOGE("卡槽%d: 不支持的 UART 编号 %u", slotIndex_, uartNum_);
+      LOGE("[SLOT%d] unsupported UART num %u", slotIndex_, uartNum_);
       state_ = MODEM_ERROR;
       return;
   }
@@ -89,7 +89,7 @@ void Modem::begin() {
   state_ = MODEM_OFF;
   bootStartMs_ = millis();
   lastActionMs_ = 0;
-  LOGI("卡槽%d: 模组初始化 (UART%u TX=%d RX=%d)", slotIndex_, uartNum_, txPin_,
+  LOGI("[SLOT%d] modem init (UART%u TX=%d RX=%d)", slotIndex_, uartNum_, txPin_,
        rxPin_);
   powerOn();
 }
@@ -106,11 +106,11 @@ void Modem::powerOn() {
   simReady_ = false;
   registered_ = false;
   csq_ = 99;
-  LOGI("卡槽%d: 上电脉冲完成，等待 AT 响应", slotIndex_);
+  LOGI("[SLOT%d] power-on pulse done, waiting for AT", slotIndex_);
 }
 
 void Modem::hardReset() {
-  LOGW("卡槽%d: 硬复位模组", slotIndex_);
+  LOGW("[SLOT%d] hard reset modem", slotIndex_);
   if (rstPin_ >= 0) {
     digitalWrite(rstPin_, LOW);
     delay(200);
@@ -180,7 +180,7 @@ void Modem::loop() {
       if (now - lastActionMs_ < 3000) break;
       lastActionMs_ = now;
       if (sendAt("AT", "OK", 1000)) {
-        LOGI("卡槽%d: AT 握手成功，模组存在", slotIndex_);
+        LOGI("[SLOT%d] AT handshake OK, modem present", slotIndex_);
         present_ = true;  // ★ 标记模组被检测到
         sendAt("ATE0", "OK", 1000);   // 关回显，减轻串口压力
         sendAt("AT+CMEE=1", "OK", 1000);
@@ -197,7 +197,7 @@ void Modem::loop() {
       } else {
         // 握手失败：模组可能没插/没接线
         present_ = false;
-        LOGW("卡槽%d: AT 无响应，模组可能未连接", slotIndex_);
+        LOGW("[SLOT%d] AT timeout - modem not responding (check wiring/power)", slotIndex_);
       }
       break;
     }
@@ -217,7 +217,7 @@ void Modem::loop() {
         if (sendAt("AT+CREG?", "OK", 2000, &resp)) {
           registered_ = (resp.indexOf(",1") >= 0 || resp.indexOf(",5") >= 0);
           if (!registered_) {
-            LOGW("卡槽%d: 网络未注册，尝试重新附着", slotIndex_);
+            LOGW("[SLOT%d] not registered, re-attach", slotIndex_);
             sendAt("AT+CFUN=1", "OK", 5000);
           }
         }
@@ -255,7 +255,7 @@ void Modem::handleLine(const String& line) {
   } else if (line.startsWith("+CREG") || line.startsWith("+CGREG")) {
     registered_ = (line.indexOf(",1") >= 0 || line.indexOf(",5") >= 0);
   } else if (line == "RDY" && state_ == MODEM_BOOTING) {
-    LOGI("卡槽%d: 模组上报 RDY", slotIndex_);
+    LOGI("[SLOT%d] modem reported RDY", slotIndex_);
   }
 }
 
@@ -341,7 +341,7 @@ void Modem::queryRegistration() {
     if (q3 >= 0 && q4 > q3) cellId_ = rest.substring(q3 + 1, q4);
   }
 
-  LOGI("卡槽%d: 网络注册 status=%d(%s) lac=%s cell=%s", slotIndex_, regStatus_,
+  LOGI("[SLOT%d] reg status=%d(%s) lac=%s cell=%s", slotIndex_, regStatus_,
        regText().c_str(), lac_.c_str(), cellId_.c_str());
 }
 
@@ -388,7 +388,7 @@ void Modem::querySimState() {
     if (v.length() >= 10) imei_ = v;
   }
 
-  LOGI("卡槽%d: SIM=%s imsi=%s iccid=%s imei=%s", slotIndex_,
+  LOGI("[SLOT%d] SIM=%s imsi=%s iccid=%s imei=%s", slotIndex_,
        simReady_ ? "READY" : "ABSENT", imsi_.c_str(), iccid_.c_str(),
        imei_.c_str());
 }
@@ -407,7 +407,7 @@ void Modem::parseCmti(const String& line) {
   int comma = line.lastIndexOf(',');
   if (comma < 0) return;
   int index = line.substring(comma + 1).toInt();
-  LOGI("卡槽%d: 新短信提示 +CMTI index=%d", slotIndex_, index);
+  LOGI("[SLOT%d] new SMS +CMTI index=%d", slotIndex_, index);
   readSmsAt(index);
 }
 
@@ -415,7 +415,7 @@ void Modem::readSmsAt(int index) {
   String resp;
   String cmd = "AT+CMGR=" + String(index);
   if (!sendAt(cmd, "OK", 5000, &resp)) {
-    LOGE("卡槽%d: 读取短信 %d 失败", slotIndex_, index);
+    LOGE("[SLOT%d] read SMS %d failed", slotIndex_, index);
     return;
   }
 
@@ -444,17 +444,17 @@ void Modem::readSmsAt(int index) {
       content.trim();
     }
   } else {
-    LOGE("卡槽%d: +CMGR 响应格式异常", slotIndex_);
+    LOGE("[SLOT%d] bad +CMGR response", slotIndex_);
   }
 
   // 无论成败都删除，防止 SIM 卡被塞满
   sendAt("AT+CMGD=" + String(index), "OK", 3000);
 
   if (content.isEmpty()) {
-    LOGW("卡槽%d: 短信 %d 内容为空，已忽略", slotIndex_, index);
+    LOGW("[SLOT%d] SMS %d empty, ignored", slotIndex_, index);
     return;
   }
-  LOGI("卡槽%d: 收到短信 来自 %s (%u 字节)", slotIndex_, sender.c_str(),
+  LOGI("[SLOT%d] SMS from %s (%u bytes)", slotIndex_, sender.c_str(),
        content.length());
   if (smsCb_ != nullptr) {
     smsCb_(slotIndex_, sender, content, resp);
@@ -468,7 +468,7 @@ void Modem::parseClip(const String& line) {
   int q2 = line.indexOf('"', q1 + 1);
   if (q2 < 0) return;
   String number = line.substring(q1 + 1, q2);
-  LOGI("卡槽%d: 来电 %s", slotIndex_, number.c_str());
+  LOGI("[SLOT%d] incoming call %s", slotIndex_, number.c_str());
   if (callCb_ != nullptr) {
     callCb_(slotIndex_, number);
   }
@@ -514,8 +514,8 @@ void Modem::queryIdentity() {
       }
     }
   }
-  LOGI("卡槽%d: 仿真信息 carrier=%s number=%s", slotIndex_, carrier_.c_str(),
-       phoneNumber_.length() ? phoneNumber_.c_str() : "(未写入)");
+  LOGI("[SLOT%d] identity carrier=%s number=%s", slotIndex_, carrier_.c_str(),
+       phoneNumber_.length() ? phoneNumber_.c_str() : "(not set)");
 }
 
 bool Modem::sendSms(const String& number, const String& content, String* error) {
@@ -538,8 +538,8 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
 
   // 1) 设置目标号码
   if (!sendAt("AT+CMGS=\"" + number + "\"", ">", 5000)) {
-    if (error) *error = "号码被模组拒绝";
-    LOGE("卡槽%d: CMGS 未返回提示符", slotIndex_);
+    if (error) *error = "number rejected";
+    LOGE("[SLOT%d] CMGS no prompt", slotIndex_);
     return false;
   }
 
@@ -558,12 +558,12 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
         String line = trimCrlf(acc);
         acc = "";
         if (line.startsWith("+CMGS")) {
-          LOGI("卡槽%d: 短信已提交 %s", slotIndex_, line.c_str());
+          LOGI("[SLOT%d] SMS submitted %s", slotIndex_, line.c_str());
         } else if (line == "OK") {
           ok = true;
         } else if (line == "ERROR" || line.startsWith("+CMS ERROR")) {
           if (error) *error = line;
-          LOGE("卡槽%d: 发送失败 %s", slotIndex_, line.c_str());
+          LOGE("[SLOT%d] send failed %s", slotIndex_, line.c_str());
           return false;
         }
       } else if (c != '\r') {
@@ -575,6 +575,6 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
   }
 
   if (!ok && error) *error = "发送超时";
-  if (ok) LOGI("卡槽%d: 短信发送成功 -> %s", slotIndex_, number.c_str());
+  if (ok) LOGI("[SLOT%d] SMS sent -> %s", slotIndex_, number.c_str());
   return ok;
 }
