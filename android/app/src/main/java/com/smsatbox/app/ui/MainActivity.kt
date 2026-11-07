@@ -29,6 +29,12 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        // 未登录直接回登录页（正常流程下 LoginActivity 才应是入口）
+        if (!Prefs.isLoggedIn) {
+            goLogin()
+            return
+        }
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
@@ -42,10 +48,15 @@ class MainActivity : AppCompatActivity() {
             switchTab(TAB_MESSAGES)
         }
 
-        // 请求通知权限（Android 13+）
+        // 请求通知权限（Android 13+ 才有这个运行时权限）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Notifier.hasPermission(this)) {
             requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
         }
+    }
+
+    private fun goLogin() {
+        startActivity(Intent(this, LoginActivity::class.java))
+        finish()
     }
 
     override fun onNewIntent(intent: Intent?) {
@@ -60,8 +71,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         // 登录态失效则回到登录页
         if (!Prefs.isLoggedIn && !isFinishing) {
-            startActivity(Intent(this, LoginActivity::class.java))
-            finish()
+            goLogin()
         }
     }
 

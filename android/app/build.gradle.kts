@@ -23,6 +23,8 @@ android {
 
     defaultConfig {
         applicationId = "com.smsatbox.app"
+        // 兼容 Android 7.0 (API 24) 及以上。
+        // 注：鸿蒙 4.2 底层是 Android 11/12（API 30/31），远高于此，完全支持。
         minSdk = 24
         targetSdk = 34
         versionCode = appVersionCode

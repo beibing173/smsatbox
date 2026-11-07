@@ -6,8 +6,8 @@ name: Build & Release
 #  【版本模型】APK 与 EXE 各自独立版本号，但共用**同一个 Release**。
 #
 #    - 各端版本号来源：versions/android.txt、versions/windows.txt
-#    - Release tag：版本快照号（如 v2026.11.02-r1），只作为「这一次发布了什么」
-#      的统一标识，不代表任何一端的版本。
+#    - Release tag：按日期编号（如 v2026.11.07、v2026.11.07-2），
+#      只作为「这一次发布了什么」的统一标识，不代表任何一端的版本。
 #    - 产物命名带平台与版本：
 #        smsatbox-android-1.2.0.apk
 #        smsatbox-windows-1.0.5.exe

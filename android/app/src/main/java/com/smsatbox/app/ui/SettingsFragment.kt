@@ -140,25 +140,39 @@ class SettingsFragment : Fragment() {
             return
         }
 
-        val progress = android.app.ProgressDialog(ctx).apply {
-            setMessage(getString(R.string.update_downloading))
-            setProgressStyle(android.app.ProgressDialog.STYLE_HORIZONTAL)
+        // 用 MaterialAlertDialog + 进度条替代已废弃的 ProgressDialog
+        val progressBar = android.widget.ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply {
             max = 100
-            setCancelable(false)
-            show()
+            progress = 0
+            val pad = (16 * ctx.resources.displayMetrics.density).toInt()
+            setPadding(pad, pad, pad, pad)
         }
+
+        val dialog = AlertDialog.Builder(ctx)
+            .setTitle(getString(R.string.update_downloading))
+            .setView(progressBar)
+            .setCancelable(false)
+            .setNegativeButton("取消", null)
+            .create()
+
+        var canceled = false
+        dialog.setOnDismissListener { canceled = true }
+        dialog.show()
 
         lifecycleScope.launch {
             try {
                 val apk = ApkInstaller.download(ctx, url, "smsatbox.apk") { done, total ->
-                    if (total > 0) {
-                        progress.progress = ((done * 100) / total).toInt()
+                    if (total > 0 && !canceled) {
+                        val pct = ((done * 100) / total).toInt()
+                        if (isAdded) {
+                            requireActivity().runOnUiThread { progressBar.progress = pct }
+                        }
                     }
                 }
-                progress.dismiss()
-                ApkInstaller.install(ctx, apk)
+                if (dialog.isShowing) dialog.dismiss()
+                if (!canceled) ApkInstaller.install(ctx, apk)
             } catch (e: Exception) {
-                progress.dismiss()
+                if (dialog.isShowing) dialog.dismiss()
                 toast(e.message ?: getString(R.string.update_failed))
             }
         }

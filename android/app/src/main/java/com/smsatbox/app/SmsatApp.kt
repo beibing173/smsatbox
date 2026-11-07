@@ -33,10 +33,11 @@ class SmsatApp : Application() {
         createNotificationChannel()
     }
 
-    /** 注册消息通知渠道（幂等，重复调用无副作用） */
+    /** 注册消息通知渠道（Android 8.0+；低版本系统无需渠道，直接跳过） */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = getSystemService(NotificationManager::class.java) ?: return
+
+        val manager = getSystemService(NOTIFICATION_SERVICE) as? NotificationManager ?: return
 
         val channel = NotificationChannel(
             CHANNEL_MESSAGES,

@@ -1,7 +1,6 @@
 package com.smsatbox.app.ui
 
 import android.content.Intent
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.View
@@ -11,16 +10,17 @@ import androidx.lifecycle.lifecycleScope
 import com.smsatbox.app.BuildConfig
 import com.smsatbox.app.Prefs
 import com.smsatbox.app.R
+import com.smsatbox.app.ThemeApplier
+import com.smsatbox.app.ThemeMode
 import com.smsatbox.app.data.ApiClient
 import com.smsatbox.app.databinding.ActivityLoginBinding
 import kotlinx.coroutines.launch
 
 /**
- * 登录页：手动填写「公网中转平台地址」和 Token。
+ * 登录页 —— 应用的启动入口。
  *
- * Token 可以是：
- *  - 用用户名密码换来的 JWT（通过 /auth/login）
- *  - 管理端生成的客户端长效令牌
+ * 手动填写「公网中转平台地址 + Token」，也支持用用户名密码换取 JWT。
+ * 已登录过则直接跳主界面。
  */
 class LoginActivity : AppCompatActivity() {
 
@@ -39,9 +39,33 @@ class LoginActivity : AppCompatActivity() {
         binding.tokenInput.setText(Prefs.token)
 
         binding.loginButton.setOnClickListener { doLogin() }
-        binding.serverInput.setOnEditorActionListener { _, _, _ ->
-            binding.tokenInput.requestFocus()
-            true
+        binding.themeButton.setOnClickListener { cycleTheme() }
+        syncThemeButton()
+
+        // 已有凭据 → 静默校验后直接进主页
+        if (Prefs.isLoggedIn) {
+            autoLogin()
+        }
+    }
+
+    /** 已保存 Token，先验证再决定是否直接进主页。 */
+    private fun autoLogin() {
+        setLoading(true)
+        lifecycleScope.launch {
+            try {
+                val res = api.verify()
+                val user = res.optJSONObject("user")
+                if (user != null) {
+                    Prefs.userName = user.optString("display_name")
+                        .ifEmpty { user.optString("username") }
+                    Prefs.userRole = user.optString("role", "member")
+                }
+                setLoading(false)
+                goMain()
+            } catch (e: Exception) {
+                // 验证失败就留在登录页，让用户手动确认
+                setLoading(false)
+            }
         }
     }
 
@@ -50,13 +74,11 @@ class LoginActivity : AppCompatActivity() {
         val token = binding.tokenInput.text?.toString()?.trim().orEmpty()
 
         if (server.isEmpty()) {
-            binding.errorText.text = "请填写中转平台地址"
-            binding.errorText.visibility = View.VISIBLE
+            showError("请填写中转平台地址")
             return
         }
         if (token.isEmpty()) {
-            binding.errorText.text = "请填写访问 Token"
-            binding.errorText.visibility = View.VISIBLE
+            showError("请填写访问 Token")
             return
         }
 
@@ -68,22 +90,30 @@ class LoginActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                val user = api.verify().optJSONObject("user")
+                val res = api.verify()
+                val user = res.optJSONObject("user")
                 if (user != null) {
-                    Prefs.userName = user.optString("display_name").ifEmpty {
-                        user.optString("username")
-                    }
+                    Prefs.userName = user.optString("display_name")
+                        .ifEmpty { user.optString("username") }
                     Prefs.userRole = user.optString("role", "member")
                 }
                 setLoading(false)
-                startActivity(Intent(this@LoginActivity, MainActivity::class.java))
-                finish()
+                goMain()
             } catch (e: Exception) {
                 setLoading(false)
-                binding.errorText.text = e.message ?: "连接失败，请检查地址与 Token"
-                binding.errorText.visibility = View.VISIBLE
+                showError(e.message ?: "连接失败，请检查地址与 Token")
             }
         }
+    }
+
+    private fun goMain() {
+        startActivity(Intent(this, MainActivity::class.java))
+        finish()
+    }
+
+    private fun showError(msg: String) {
+        binding.errorText.text = msg
+        binding.errorText.visibility = View.VISIBLE
     }
 
     private fun setLoading(loading: Boolean) {
@@ -96,7 +126,26 @@ class LoginActivity : AppCompatActivity() {
         binding.progressBar.visibility = if (loading) View.VISIBLE else View.GONE
     }
 
-    /** 状态栏图标明暗跟随当前实际生效的日夜模式。 */
+    // ===== 主题 =====
+
+    private fun syncThemeButton() {
+        binding.themeButton.text = when (Prefs.themeMode) {
+            ThemeMode.DARK -> "🌙 深色"
+            ThemeMode.LIGHT -> "☀ 浅色"
+            ThemeMode.SYSTEM -> "🖥 跟随系统"
+        }
+    }
+
+    private fun cycleTheme() {
+        val next = when (Prefs.themeMode) {
+            ThemeMode.SYSTEM -> ThemeMode.DARK
+            ThemeMode.DARK -> ThemeMode.LIGHT
+            ThemeMode.LIGHT -> ThemeMode.SYSTEM
+        }
+        ThemeApplier.set(this, next)
+        syncThemeButton()
+    }
+
     private fun applySystemBarStyle() {
         val isLight = isLightThemeNow()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

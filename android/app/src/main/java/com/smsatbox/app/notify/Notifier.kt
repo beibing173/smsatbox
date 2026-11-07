@@ -1,8 +1,6 @@
 package com.smsatbox.app.notify
 
 import android.Manifest
-import android.app.Notification
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
@@ -20,13 +18,23 @@ import com.smsatbox.app.ui.MainActivity
 /**
  * 系统通知：新短信 / 未接来电。
  *
- * 验证码消息会单独展示，方便下拉通知栏直接复制。
+ * 兼容性处理：
+ *  - Android 8.0+ 走通知渠道；以下版本不用渠道
+ *  - Android 13+ 才需要 POST_NOTIFICATIONS 运行时权限
+ *  - Android 12+ 要求 PendingIntent 显式指定可变性；以下版本没有该 FLAG
  */
 object Notifier {
 
-    private const val TAG = "smsatbox-msg"
+    /** PendingIntent 的 flags：Android 12+ 必须带 mutable/immutable 标记 */
+    private fun pendingFlags(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+    }
 
-    /** Android 13+ 需要运行时授权 */
+    /** Android 13+ 需要运行时授权；低版本直接视为已授权 */
     fun hasPermission(ctx: Context): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
         return ContextCompat.checkSelfPermission(
@@ -43,12 +51,7 @@ object Notifier {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra("message_id", msg.id)
         }
-        val pending = PendingIntent.getActivity(
-            ctx,
-            msg.id,
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
+        val pending = PendingIntent.getActivity(ctx, msg.id, intent, pendingFlags())
 
         val title = buildString {
             if (msg.isCall) append("📞 未接来电") else append("💬 新短信")
@@ -61,11 +64,7 @@ object Notifier {
                 append(msg.sender)
                 append("：")
             }
-            if (msg.isCall) {
-                append("未接来电")
-            } else {
-                append(msg.content.take(120))
-            }
+            append(if (msg.isCall) "未接来电" else msg.content.take(120))
         }
 
         val builder = NotificationCompat.Builder(ctx, SmsatApp.CHANNEL_MESSAGES)
@@ -80,7 +79,6 @@ object Notifier {
             .setWhen(System.currentTimeMillis())
             .setShowWhen(true)
 
-        // 验证码消息：额外提示并允许直接复制
         if (!msg.code.isNullOrEmpty()) {
             builder.setSubText("验证码 ${msg.code}")
             val copyIntent = Intent(ctx, CopyReceiver::class.java).apply {
@@ -88,19 +86,17 @@ object Notifier {
                 putExtra(CopyReceiver.EXTRA_TEXT, msg.code)
             }
             val copyPending = PendingIntent.getBroadcast(
-                ctx,
-                msg.id + 100000,
-                copyIntent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                ctx, msg.id + 100000, copyIntent, pendingFlags()
             )
             builder.addAction(0, ctx.getString(R.string.copy_code), copyPending)
         }
 
         try {
-            NotificationManagerCompat.from(ctx)
-                .notify(msg.id, builder.build())
+            NotificationManagerCompat.from(ctx).notify(msg.id, builder.build())
         } catch (e: SecurityException) {
             // 用户未授权，静默忽略
+        } catch (e: Exception) {
+            // 个别定制系统通知服务异常，不影响主流程
         }
     }
 
@@ -108,7 +104,7 @@ object Notifier {
     fun clearAll(ctx: Context) {
         try {
             NotificationManagerCompat.from(ctx).cancelAll()
-        } catch (e: SecurityException) {
+        } catch (e: Exception) {
             // ignore
         }
     }

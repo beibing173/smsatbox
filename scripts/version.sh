@@ -57,19 +57,50 @@ to_version_code() {
   printf "%d" $(( major * 10000 + minor * 100 + patch ))
 }
 
-# 快照号：按日期 + 当日序号，用于 Release tag
+# 快照号：按日期 + 当日序号，用于 Release tag。
+#   当天第一次 → 2026.11.07
+#   当天第二次 → 2026.11.07-2
+#   当天第三次 → 2026.11.07-3
+# 序号来源优先查 GitHub 已存在的 tag（保证跨机器/多次运行不重号），
+# 查不到时退化为本地计数文件。
 snapshot_id() {
-  local today serial_file next
+  local today serial_file next candidate
   today="$(date -u +%Y.%m.%d)"
   serial_file="$VERSIONS_DIR/.snapshot-$today"
 
+  # 1) 先看本地计数
   if [ -f "$serial_file" ]; then
     next=$(( $(tr -d ' \t\r\n' < "$serial_file") + 1 ))
   else
     next=1
   fi
+
+  # 2) 如果 gh 可用，查远端已被占用的最大序号，取更大者
+  if command -v gh >/dev/null 2>&1 && [ -n "${GITHUB_REPOSITORY:-}" ]; then
+    local max_remote=0
+    local existing
+    existing="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 100 \
+                 --json tagName -q '.[].tagName' 2>/dev/null || true)"
+    while IFS= read -r t; do
+      [ -z "$t" ] && continue
+      case "$t" in
+        "v$today")        [ "$max_remote" -lt 1 ] && max_remote=1 ;;
+        "v$today-"*)      n="${t#v$today-}"
+                          if [[ "$n" =~ ^[0-9]+$ ]] && [ "$n" -gt "$max_remote" ]; then
+                            max_remote="$n"
+                          fi ;;
+      esac
+    done <<< "$existing"
+    [ "$max_remote" -ge "$next" ] && next=$(( max_remote + 1 ))
+  fi
+
   printf "%s" "$next" > "$serial_file"
-  printf "%s-r%s" "$today" "$next"
+
+  if [ "$next" -le 1 ]; then
+    printf "%s" "$today"
+  else
+    printf "%s-%s" "$today" "$next"
+  fi
 }
 
 cmd="${1:-all}"
