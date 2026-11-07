@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  SMSATBOX · 局域网调试 Web 服务实现
 // ============================================================================
 #include "lanweb.h"
@@ -149,7 +149,7 @@ void begin() {
   s_server.onNotFound(handleNotFound);
   s_server.begin();
   s_active = true;
-  LOGI("局域网调试服务已启动 http://%s/",
+  LOGI("lan web started http://%s/",
        WiFi.localIP().toString().c_str());
 }
 
@@ -164,7 +164,7 @@ void stop() {
   if (!s_active) return;
   s_server.stop();
   s_active = false;
-  LOGI("局域网调试服务已停止");
+  LOGI("lan web stopped");
 }
 
 }  // namespace lanweb
