@@ -113,10 +113,12 @@ class SlotReport(BaseModel):
     # ---- 网络注册 ----
     # registered: 是否已注册到网络
     registered: bool | None = None
-    # reg_status: 原始 AT+CREG 状态码说明
+    # reg_status: AT+CREG 状态码
     #   0=未注册且未搜索  1=已注册本地网  2=搜索中  3=注册被拒
     #   4=未知  5=已注册漫游
-    reg_status: int | None = Field(default=None, ge=0, le=5)
+    # 放宽到 0..99：不同模组固件格式差异较大（有的返回粘连值），
+    # 服务端以 registered 布尔值为主判断，不因解析差异拒绝整条上报。
+    reg_status: int | None = Field(default=None, ge=0, le=99)
     # reg_text: 人类可读描述，如"已注册（本地网络）"
     reg_text: str | None = Field(default=None, max_length=32)
     # lac / cell_id: 位置区码与小区 ID
