@@ -11,9 +11,13 @@
     <!-- 登录 -->
     <string name="login_title">登录中转平台</string>
     <string name="login_server_hint">公网中转平台地址，例如 https://sms.example.com</string>
+    <string name="login_username">账号</string>
+    <string name="login_username_hint">请输入账号</string>
+    <string name="login_password">密码</string>
+    <string name="login_password_hint">请输入密码</string>
     <string name="login_token_hint">访问 Token</string>
     <string name="login_button">登 录</string>
-    <string name="login_verifying">验证中…</string>
+    <string name="login_verifying">登录中…</string>
 
     <!-- 消息 -->
     <string name="messages_title">消息总览</string>
