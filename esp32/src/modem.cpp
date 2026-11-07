@@ -428,12 +428,28 @@ void Modem::queryRegistration() {
   int stat = -1;
   if (numCount >= 2) {
     stat = nums[1];
+    // 兜底：某些模组（如 ML307A）会把 +CGREG 的状态码粘进来，
+    // 变成 "0,11" 这种。此时取个位数即为真实 stat。
+    if (stat > 5) {
+      int alt = stat % 10;
+      if (alt >= 0 && alt <= 5) {
+        stat = alt;
+      }
+    }
   } else if (numCount == 1) {
     int v = nums[0];
     if (v >= 0 && v <= 5) {
       stat = v;              // 直接就是 stat
     } else if (v >= 10 && v <= 59) {
       stat = v % 10;         // 粘连：n*10 + stat
+    }
+  }
+
+  // 极端兜底：若仍无法解析，用 +CGREG 的信息或直接看原始串
+  if (stat < 0 || stat > 5) {
+    // 原始串里含 "1" 或 "5" 且不含 "0,"/2/3 时，倾向于已注册
+    if (body.indexOf(",1") >= 0 || body.indexOf(",5") >= 0) {
+      stat = body.indexOf(",5") >= 0 ? 5 : 1;
     }
   }
 
@@ -460,8 +476,9 @@ void Modem::queryRegistration() {
     }
   }
 
-  LOGI("[SLOT%d] reg raw='%s' -> stat=%d (%s) lac=%s cell=%s",
-       slotIndex_, body.c_str(), regStatus_, regText().c_str(),
+  // 串口日志只用 ASCII，中文由前端自行映射（避免 USB 串口工具乱码）
+  LOGI("[SLOT%d] reg raw='%s' -> stat=%d registered=%d lac=%s cell=%s",
+       slotIndex_, body.c_str(), regStatus_, registered_ ? 1 : 0,
        lac_.c_str(), cellId_.c_str());
 }
 
