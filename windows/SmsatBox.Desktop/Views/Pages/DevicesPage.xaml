@@ -10,11 +10,13 @@
         <core:ZeroToVisibleConverter x:Key="ZeroToVisible" />
         <!-- 卡槽条目 -->
         <DataTemplate x:Key="SlotItem">
-            <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="9" Padding="12,9" Margin="0,0,0,7">
+            <Border Background="{DynamicResource Brush.SurfaceAlt}" CornerRadius="9" Padding="12,9" Margin="0,0,0,7"
+                    Opacity="{Binding Opacity, Mode=OneWay}">
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
 
@@ -26,21 +28,52 @@
                     </Border>
 
                     <StackPanel Grid.Column="1" Margin="11,0,0,0" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding NumberLabel}" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource Brush.Text}" />
+                        <!-- 标题：优先备注 -->
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding DisplayName, Mode=OneWay}" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource Brush.Text}" />
+                            <Border CornerRadius="5" Padding="5,0" Margin="7,0,0,0" VerticalAlignment="Center"
+                                    Background="{DynamicResource Brush.Surface}">
+                                <TextBlock Text="已隐藏" FontSize="9.5" Style="{StaticResource Text.Muted}" />
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Hidden}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- 模组状态徽标 -->
                         <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
-                            <TextBlock Text="{Binding CarrierLabel}" Style="{StaticResource Text.Muted}" FontSize="11" />
+                            <TextBlock Text="{Binding Module.StateBadge, Mode=OneWay}"
+                                       Style="{StaticResource Text.Muted}" FontSize="11" />
                             <TextBlock Text=" · " Style="{StaticResource Text.Muted}" FontSize="11" />
-                            <TextBlock Text="{Binding PlanName}" Style="{StaticResource Text.Muted}" FontSize="11" />
+                            <TextBlock Text="{Binding CarrierLabel, Mode=OneWay}"
+                                       Style="{StaticResource Text.Muted}" FontSize="11" />
+                            <TextBlock Text=" · " Style="{StaticResource Text.Muted}" FontSize="11" />
+                            <TextBlock Text="{Binding Module.SimState, Mode=OneWay}"
+                                       Style="{StaticResource Text.Muted}" FontSize="11" />
                         </StackPanel>
                     </StackPanel>
 
-                    <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
-                        <TextBlock Text="{Binding SignalStars}" FontFamily="Segoe UI Symbol" FontSize="12"
-                                   Foreground="{DynamicResource Brush.Success}" HorizontalAlignment="Right" />
-                        <TextBlock Text="{Binding SignalLabel}" Style="{StaticResource Text.Muted}" FontSize="10.5"
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                Margin="0,0,8,0">
+                        <TextBlock Text="{Binding Module.SignalBars, Mode=OneWay}" FontFamily="Segoe UI Symbol"
+                                   FontSize="12" Foreground="{DynamicResource Brush.Success}"
+                                   HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding Module.SignalText, Mode=OneWay}"
+                                   Style="{StaticResource Text.Muted}" FontSize="10.5"
                                    HorizontalAlignment="Right" Margin="0,2,0,0" />
                     </StackPanel>
+
+                    <Button Grid.Column="3" Style="{StaticResource Btn.Small}" Content="编辑"
+                            VerticalAlignment="Center" Click="OnEditSlotClick"
+                            Tag="{Binding}" />
                 </Grid>
             </Border>
         </DataTemplate>
@@ -88,13 +121,35 @@
                         </StackPanel>
 
                         <StackPanel Grid.Column="2" HorizontalAlignment="Right">
-                            <TextBlock Text="{Binding SlotCountLabel}" Style="{StaticResource Text.Sub}"
-                                       HorizontalAlignment="Right" />
-                            <TextBlock Text="{Binding LastSeenLabel}" Style="{StaticResource Text.Muted}"
-                                       HorizontalAlignment="Right" Margin="0,3,0,0"
-                                       ToolTip="{Binding LastSeenExact}" />
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <TextBlock Text="{Binding SlotCountLabel}" Style="{StaticResource Text.Sub}" />
+                                <TextBlock Text="{Binding ModuleSummary, Mode=OneWay}" Style="{StaticResource Text.Muted}"
+                                           FontSize="11" Margin="8,0,0,0" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,5,0,0">
+                                <Button Style="{StaticResource Btn.Small}" Content="编辑设备"
+                                        Click="OnEditDeviceClick" Tag="{Binding}" Margin="0,0,6,0" />
+                                <TextBlock Text="{Binding LastSeenLabel}" Style="{StaticResource Text.Muted}"
+                                           VerticalAlignment="Center"
+                                           ToolTip="{Binding LastSeenExact}" />
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
+
+                    <!-- 设备备注 -->
+                    <TextBlock Text="{Binding Remark, Mode=OneWay}"
+                               FontSize="11.5" Margin="0,9,0,0" TextWrapping="Wrap">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource Text.Muted}">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding HasRemark}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
 
                     <Border Height="1" Background="{DynamicResource Brush.Border}" Margin="0,13,0,11" />
 
