@@ -99,7 +99,8 @@ class SlotReport(BaseModel):
     # ---- 基础 ----
     phone_number: str | None = Field(default=None, max_length=32)
     carrier: str | None = Field(default=None, max_length=64)
-    signal_dbm: int | None = Field(default=None, ge=-140, le=0)
+    # signal_dbm: -140..0 为有效值；99 表示未知（部分模组/无信号时上报）
+    signal_dbm: int | None = Field(default=None, ge=-140, le=99)
     msisdn: str | None = Field(default=None, max_length=32)
 
     # ---- 模组与 SIM ----
