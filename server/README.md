@@ -46,31 +46,65 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 密码：  Admin@123456
 ```
 
-### 方式 B：Docker 一键部署（推荐）
+### 方式 B：Docker 直接拉镜像（推荐）
+
+镜像已发布在 Docker Hub：**[beibing173/smsatbox-server](https://hub.docker.com/r/beibing173/smsatbox-server)**
+
+```bash
+# 最简：一条命令跑起来
+docker pull beibing173/smsatbox-server:latest
+
+docker run -d --name smsatbox-server \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -e ADMIN_PASSWORD='请改成强密码' \
+  -e SECRET_KEY="$(openssl rand -base64 48)" \
+  -v smsatbox-data:/data \
+  beibing173/smsatbox-server:latest
+```
+
+或者用 compose（配置集中管理，推荐生产）：
 
 ```bash
 cd server
 cp .env.example .env          # Windows: copy .env.example .env
 # 编辑 .env，务必修改 ADMIN_PASSWORD 与 SECRET_KEY
 
-docker compose up -d --build
+docker compose pull           # 拉取最新镜像
+docker compose up -d
 docker compose logs -f
 ```
 
-### 方式 C：手动构建镜像
+**可用标签**：
 
+| 标签 | 含义 |
+| --- | --- |
+| `latest` | 最新构建 |
+| `1.0.0` | 精确版本 |
+| `1.0` | 主.次版本 |
+| `sha-xxxxxxx` | 对应 commit |
+
+**升级**：
 ```bash
-cd server
-docker build -t beibing173/smsatbox-server:1.0.0 .
-docker run -d --name smsatbox-server \
-  -p 8080:8080 \
-  -e ADMIN_PASSWORD='请改成强密码' \
-  -e SECRET_KEY='一串随机字符串' \
-  -v smsatbox-data:/data \
-  beibing173/smsatbox-server:1.0.0
+docker compose pull && docker compose up -d
+# 或单容器：
+docker pull beibing173/smsatbox-server:latest
+docker stop smsatbox-server && docker rm smsatbox-server && \
+  docker run -d ...（同上）
 ```
 
 > 数据（SQLite + 固件）持久化在 `/data`，挂载 volume 后重建容器不丢数据。
+
+### 方式 C：从源码构建镜像
+
+改了代码想自己编译时用：
+
+```bash
+cd server
+docker compose up -d --build
+# 或
+docker build -t beibing173/smsatbox-server:1.0.0 .
+```
 
 ### 一键验收
 

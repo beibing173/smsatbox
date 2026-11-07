@@ -1,23 +1,25 @@
 # ==============================================================================
 # SMSATBOX Server · docker compose 部署
 #
-#   最简用法（不建 .env 也能跑，用下面的默认值）：
+#   【推荐】直接用 Docker Hub 上的现成镜像：
+#     cp .env.example .env       # 修改 ADMIN_PASSWORD / SECRET_KEY
+#     docker compose pull
 #     docker compose up -d
 #
-#   推荐用法（生产必须改密码）：
-#     1. copy .env.example .env      (Windows)
-#        cp .env.example .env        (Linux/macOS)
-#     2. 修改 .env 里的 ADMIN_PASSWORD / SECRET_KEY
-#     3. docker compose up -d
-#     4. 打开 http://<服务器IP>:8080
+#   【从源码构建】修改了代码想本地编译时用：
+#     docker compose up -d --build
 #
-#   版本覆盖规则：镜像 tag 同名覆盖，不同版本新建。
-#   拉最新镜像升级： docker compose pull && docker compose up -d
+#   升级到最新版：
+#     docker compose pull && docker compose up -d
+#
+#   镜像：beibing173/smsatbox-server
+#     标签 latest / 1.0.0 / 1.0 / sha-xxxxxxx
 # ==============================================================================
 services:
   server:
-    image: beibing173/smsatbox-server:${IMAGE_TAG:-1.0.0}
+    image: beibing173/smsatbox-server:${IMAGE_TAG:-latest}
     build:
+      # 仅当显式指定 --build 时才会用到；平时 compose pull 直接用镜像
       context: .
       dockerfile: Dockerfile
     container_name: smsatbox-server
@@ -28,7 +30,7 @@ services:
       # ---- 容器内路径与区域 ----
       DATA_DIR: /data
       TZ: Asia/Shanghai
-      # ---- 安全：务必通过 .env 或 shell 环境变量覆盖 ----
+      # ---- 安全：务必通过 .env 覆盖 ----
       ADMIN_USERNAME: ${ADMIN_USERNAME:-admin}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin@123456}
       ADMIN_DISPLAY_NAME: ${ADMIN_DISPLAY_NAME:-超级管理员}
@@ -39,13 +41,14 @@ services:
       DEVICE_OFFLINE_SECONDS: ${DEVICE_OFFLINE_SECONDS:-90}
       MAX_FIRMWARE_MB: ${MAX_FIRMWARE_MB:-16}
       # ---- 维度二：协同升级 ----
+      # ESP32 检测到 Server 版本落后时，可请求拉取最新镜像并重启
       SERVER_IMAGE: ${SERVER_IMAGE:-beibing173/smsatbox-server}
       SERVER_UPGRADE_ENABLED: ${SERVER_UPGRADE_ENABLED:-false}
       SERVER_UPGRADE_COMMAND: ${SERVER_UPGRADE_COMMAND:-}
     volumes:
       # SQLite 数据库 + 固件文件持久化，重建容器不丢数据
       - smsatbox-data:/data
-      # 若要允许 ESP32 触发 Server 自升级，需放开下面这行并设 SERVER_UPGRADE_ENABLED=true
+      # 若要让 ESP32 触发 Server 自升级，需放开下面这行并设 SERVER_UPGRADE_ENABLED=true
       # 注意：挂载 docker.sock 等于给予容器宿主机 root 级控制权，请自行评估
       # - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:

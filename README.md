@@ -25,17 +25,42 @@
 | 📱 Android | [smsatbox-v1.0.0.apk](https://github.com/beibing173/smsatbox/releases/download/v1.0.0/smsatbox-v1.0.0.apk) | 5.1 MB |
 | 🖥️ Windows | [smsatbox-v1.0.0.exe](https://github.com/beibing173/smsatbox/releases/download/v1.0.0/smsatbox-v1.0.0.exe) | 69 MB 单文件 |
 
-**启动服务端**：
+**启动服务端**（二选一）：
 
 ```bash
+# 方式 A：直接拉 Docker Hub 上的现成镜像（推荐）
+docker pull beibing173/smsatbox-server:latest
+docker run -d --name smsatbox-server --restart unless-stopped \
+  -p 8080:8080 \
+  -e ADMIN_PASSWORD='换成你的强密码' \
+  -e SECRET_KEY="$(openssl rand -base64 48)" \
+  -v smsatbox-data:/data \
+  beibing173/smsatbox-server:latest
+
+# 方式 B：用 docker compose（自动拉镜像，配置集中管理）
 cd server
 cp .env.example .env       # 修改 ADMIN_PASSWORD / SECRET_KEY
-docker compose up -d --build
+docker compose up -d
 ```
 
 浏览器打开 `http://<服务器IP>:8080`，默认 `admin / Admin@123456`。
 
-不用 Docker 也行：
+**镜像标签说明**：
+
+| 标签 | 含义 |
+| --- | --- |
+| `latest` | 最新构建（跟随 main 分支） |
+| `1.0.0` | 精确版本 |
+| `1.0` | 主.次版本 |
+| `sha-fd312bc` | 对应 commit |
+
+拉最新版升级：
+```bash
+docker pull beibing173/smsatbox-server:latest
+docker compose up -d          # 或 docker restart smsatbox-server
+```
+
+不想用 Docker 也行：
 
 ```bash
 cd server
