@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  SMSATBOX · 配网实现（AP + Captive Portal + DNS 劫持）
 // ============================================================================
 #include "portal.h"
@@ -88,7 +88,7 @@ void handleSave() {
   next.configured = true;
   cfg::save(next);
 
-  LOGI("配网完成，即将重启进入正常工作模式");
+  LOGI("setup saved, rebooting");
   s_server.send(
       200, "text/html; charset=utf-8",
       String(FPSTR(PAGE_PORTAL_HEAD)) +
@@ -118,7 +118,7 @@ void begin() {
   bool ok = WiFi.softAP(AP_SSID, (strlen(AP_PASSWORD) ? AP_PASSWORD : nullptr),
                         AP_CHANNEL, 0, AP_MAX_CLIENTS);
   if (!ok) {
-    LOGE("AP 热点启动失败");
+    LOGE("AP start failed");
     return;
   }
 
@@ -136,7 +136,7 @@ void begin() {
   s_server.begin();
 
   s_active = true;
-  LOGI("配网热点已开启: SSID=%s IP=%s", AP_SSID,
+  LOGI("AP started: SSID=%s IP=%s", AP_SSID,
        WiFi.softAPIP().toString().c_str());
 }
 
@@ -155,7 +155,7 @@ void stop() {
   WiFi.softAPdisconnect(true);
   net::setApMode(false);
   s_active = false;
-  LOGI("配网模式已关闭");
+  LOGI("setup mode closed");
 }
 
 }  // namespace portal
