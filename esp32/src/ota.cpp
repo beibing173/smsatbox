@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  SMSATBOX · OTA 双分区升级实现
 // ============================================================================
 #include "ota.h"
@@ -160,7 +160,7 @@ bool performUpdate(const String& rawUrl, const String& expectedMd5,
     return false;
   }
 
-  LOGI("OTA 开始: v%s <- %s", version.c_str(), url.c_str());
+  LOGI("OTA start: v%s <- %s", version.c_str(), url.c_str());
 
   HTTPClient http;
   http.setTimeout(60000);
@@ -189,13 +189,13 @@ bool performUpdate(const String& rawUrl, const String& expectedMd5,
   if (code != 200) {
     http.end();
     if (error) *error = String("下载失败 HTTP ") + code;
-    LOGE("OTA 下载失败 code=%d", code);
+    LOGE("OTA download failed code=%d", code);
     return false;
   }
 
   int totalSize = http.getSize();
   if (totalSize <= 0) {
-    LOGW("OTA 未获得文件大小，继续尝试");
+    LOGW("OTA size unknown, continue");
   }
 
   // 检查备用分区空间
@@ -203,14 +203,14 @@ bool performUpdate(const String& rawUrl, const String& expectedMd5,
   if (totalSize > 0 && (uint32_t)totalSize > maxSketch) {
     http.end();
     if (error) *error = "分区空间不足";
-    LOGE("OTA 空间不足: 需要 %d, 可用 %u", totalSize, maxSketch);
+    LOGE("OTA no space: need %d have %u", totalSize, maxSketch);
     return false;
   }
 
   if (!Update.begin(totalSize > 0 ? totalSize : UPDATE_SIZE_UNKNOWN)) {
     http.end();
     if (error) *error = "无法开始写入";
-    LOGE("Update.begin 失败: %s", Update.errorString());
+    LOGE("Update.begin failed: %s", Update.errorString());
     return false;
   }
 
@@ -236,7 +236,7 @@ bool performUpdate(const String& rawUrl, const String& expectedMd5,
       Update.abort();
       http.end();
       if (error) *error = "写入失败";
-      LOGE("Update.write 失败: %s", Update.errorString());
+      LOGE("Update.write failed: %s", Update.errorString());
       return false;
     }
     md5Update(&md5ctx, buf, n);
@@ -247,7 +247,7 @@ bool performUpdate(const String& rawUrl, const String& expectedMd5,
       uint32_t pct = (uint32_t)((uint64_t)written * 100 / totalSize);
       if (pct >= lastProgress + 25) {
         lastProgress = pct;
-        LOGI("OTA 进度 %u%% (%d/%d)", pct, written, totalSize);
+        LOGI("OTA progress %u%% (%d/%d)", pct, written, totalSize);
       }
     }
   }
@@ -256,7 +256,7 @@ bool performUpdate(const String& rawUrl, const String& expectedMd5,
   if (totalSize > 0 && written != totalSize) {
     Update.abort();
     if (error) *error = String("下载不完整 ") + written + "/" + totalSize;
-    LOGE("OTA 下载不完整 %d/%d", written, totalSize);
+    LOGE("OTA incomplete %d/%d", written, totalSize);
     return false;
   }
 
@@ -264,21 +264,21 @@ bool performUpdate(const String& rawUrl, const String& expectedMd5,
   String actual = md5Final(&md5ctx);
   String expected = expectedMd5;
   expected.toLowerCase();
-  LOGI("OTA 校验 MD5 实际=%s 期望=%s", actual.c_str(), expected.c_str());
+  LOGI("OTA md5 actual=%s expect=%s", actual.c_str(), expected.c_str());
   if (expected.length() == 32 && actual != expected) {
     Update.abort();
     if (error) *error = "MD5 校验失败";
-    LOGE("OTA MD5 不匹配，已放弃升级，保持当前固件");
+    LOGE("OTA md5 mismatch, aborted");
     return false;
   }
 
   if (!Update.end(true)) {
     if (error) *error = String("提交失败: ") + Update.errorString();
-    LOGE("Update.end 失败: %s", Update.errorString());
+    LOGE("Update.end failed: %s", Update.errorString());
     return false;
   }
 
-  LOGI("OTA 写入完成，%d 字节，即将重启", written);
+  LOGI("OTA written %d bytes, rebooting", written);
   return true;
 }
 
