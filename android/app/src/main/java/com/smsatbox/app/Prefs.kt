@@ -38,6 +38,7 @@ object Prefs {
     private const val KEY_LAST_MSG_ID = "last_message_id"
     private const val KEY_USER_NAME = "user_name"
     private const val KEY_USER_ROLE = "user_role"
+    private const val KEY_LAST_USERNAME = "last_username"
 
     private lateinit var sp: SharedPreferences
 
@@ -73,6 +74,11 @@ object Prefs {
     var userRole: String
         get() = sp.getString(KEY_USER_ROLE, "member") ?: "member"
         set(value) = sp.edit().putString(KEY_USER_ROLE, value).apply()
+
+    /** 上次登录用的账号（下次打开自动填好，密码不存）。 */
+    var lastUsername: String
+        get() = sp.getString(KEY_LAST_USERNAME, "") ?: ""
+        set(value) = sp.edit().putString(KEY_LAST_USERNAME, value).apply()
 
     val isLoggedIn: Boolean
         get() = serverUrl.isNotEmpty() && token.isNotEmpty()
