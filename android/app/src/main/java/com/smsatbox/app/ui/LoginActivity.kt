@@ -19,8 +19,8 @@ import kotlinx.coroutines.launch
 /**
  * 登录页 —— 应用的启动入口。
  *
- * 手动填写「公网中转平台地址 + Token」，也支持用用户名密码换取 JWT。
- * 已登录过则直接跳主界面。
+ * 三项输入：中转平台地址 + 账号 + 密码。
+ * 登录成功后服务端返回 JWT，保存在本地用于后续请求。
  */
 class LoginActivity : AppCompatActivity() {
 
@@ -36,19 +36,20 @@ class LoginActivity : AppCompatActivity() {
 
         binding.versionText.text = "v${BuildConfig.APP_VERSION}"
         binding.serverInput.setText(Prefs.serverUrl)
-        binding.tokenInput.setText(Prefs.token)
+        binding.usernameInput.setText(Prefs.lastUsername)
+        binding.passwordInput.setText("")
 
         binding.loginButton.setOnClickListener { doLogin() }
         binding.themeButton.setOnClickListener { cycleTheme() }
         syncThemeButton()
 
-        // 已有凭据 → 静默校验后直接进主页
-        if (Prefs.isLoggedIn) {
+        // 已有有效 Token → 静默验证后直接进主页
+        if (Prefs.serverUrl.isNotEmpty() && Prefs.token.isNotEmpty()) {
             autoLogin()
         }
     }
 
-    /** 已保存 Token，先验证再决定是否直接进主页。 */
+    /** 已保存 Token，先验证有效性再决定是否直接进主页。 */
     private fun autoLogin() {
         setLoading(true)
         lifecycleScope.launch {
@@ -63,7 +64,8 @@ class LoginActivity : AppCompatActivity() {
                 setLoading(false)
                 goMain()
             } catch (e: Exception) {
-                // 验证失败就留在登录页，让用户手动确认
+                // Token 失效，留在登录页
+                Prefs.clearSession()
                 setLoading(false)
             }
         }
@@ -71,37 +73,60 @@ class LoginActivity : AppCompatActivity() {
 
     private fun doLogin() {
         val server = binding.serverInput.text?.toString()?.trim().orEmpty()
-        val token = binding.tokenInput.text?.toString()?.trim().orEmpty()
+        val username = binding.usernameInput.text?.toString()?.trim().orEmpty()
+        val password = binding.passwordInput.text?.toString() ?: ""
 
         if (server.isEmpty()) {
             showError("请填写中转平台地址")
             return
         }
-        if (token.isEmpty()) {
-            showError("请填写访问 Token")
+        if (username.isEmpty()) {
+            showError("请填写账号")
+            return
+        }
+        if (password.isEmpty()) {
+            showError("请填写密码")
             return
         }
 
         Prefs.serverUrl = server
-        Prefs.token = token
 
         setLoading(true)
         binding.errorText.visibility = View.GONE
 
         lifecycleScope.launch {
             try {
-                val res = api.verify()
+                val res = api.login(username, password)
+
+                val token = res.optString("access_token")
+                if (token.isEmpty()) {
+                    setLoading(false)
+                    showError("服务端未返回访问令牌")
+                    return@launch
+                }
+                Prefs.token = token
+
                 val user = res.optJSONObject("user")
                 if (user != null) {
                     Prefs.userName = user.optString("display_name")
                         .ifEmpty { user.optString("username") }
                     Prefs.userRole = user.optString("role", "member")
                 }
+                Prefs.lastUsername = username
+
                 setLoading(false)
                 goMain()
             } catch (e: Exception) {
                 setLoading(false)
-                showError(e.message ?: "连接失败，请检查地址与 Token")
+                val msg = e.message ?: ""
+                showError(
+                    when {
+                        msg.contains("401") || msg.contains("用户名或密码") ->
+                            "账号或密码错误"
+                        msg.contains("403") -> "该账号已被禁用"
+                        else -> msg.ifEmpty { "连接失败，请检查地址" }
+                    }
+                )
             }
         }
     }
