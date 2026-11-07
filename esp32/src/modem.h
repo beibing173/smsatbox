@@ -94,7 +94,13 @@ class Modem {
   /** 主动刷新一次完整状态（会占用串口，约 1-2 秒） */
   void refreshAll();
 
+  /** 成功握手次数（用于判断是否曾经工作过） */
+  bool everConnected() const { return everConnected_; }
+
  private:
+  /** 根据缺席次数决定重试间隔：刚失败时快，久失败后慢 */
+  uint32_t retryInterval() const;
+
   void handleLine(const String& line);
   void handleUrc(const String& line);
   bool sendAt(const String& cmd, const String& expect, uint32_t timeoutMs,
@@ -135,6 +141,10 @@ class Modem {
   String imsi_;               // SIM 卡 IMSI
   String iccid_;              // SIM 卡 ICCID
   String imei_;               // 模组 IMEI
+
+  // ---- v1.2 新增：防呆（模组可选插拔）----
+  int absentRounds_ = 0;      // 连续未检测到模组的轮次
+  bool everConnected_ = false; // 是否曾经成功握手过
 
   static SmsCallback smsCb_;
   static CallCallback callCb_;
