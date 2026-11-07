@@ -554,6 +554,72 @@
     }
   }
 
+  /** 信号格：把 dBm 转成 0-4 格的可视化 */
+  function signalBars(level) {
+    const n = Math.max(0, Math.min(4, Number(level) || 0));
+    let html = '<span class="bars">';
+    for (let i = 1; i <= 4; i++) {
+      html += '<i class="' + (i <= n ? "on" : "") + '"></i>';
+    }
+    html += "</span>";
+    return html;
+  }
+
+  /** 渲染单个卡槽（含模组真实状态、备注、隐藏标记） */
+  function renderSlot(s, isAdmin) {
+    const m = s.module || {};
+    const hidden = s.visible === false;
+    const expire = s.plan_expire_at ? s.plan_expire_at.slice(0, 10) : "未设置";
+    const expired = s.plan_expire_at && new Date(s.plan_expire_at) < new Date();
+
+    // 模组状态徽标
+    let moduleBadge;
+    if (!m.present) {
+      moduleBadge = '<span class="tag danger">未检测到模组</span>';
+    } else if (m.module_state !== "ready") {
+      moduleBadge = '<span class="tag warn">模组 ' + esc(m.module_state || "未知") + "</span>";
+    } else if (!m.registered) {
+      moduleBadge = '<span class="tag warn">' + esc(m.reg_text || "未注册网络") + "</span>";
+    } else {
+      moduleBadge = '<span class="tag ok">' + esc(m.reg_text || "已注册") + "</span>";
+    }
+
+    const simBadge =
+      m.sim_state === "ready"
+        ? '<span class="tag">SIM 就绪</span>'
+        : m.present
+        ? '<span class="tag warn">无 SIM 卡</span>'
+        : "";
+
+    const sigHtml = m.present && m.rssi_csq !== undefined && m.rssi_csq !== 99
+      ? signalBars(m.signal_level) +
+        '<span class="sig-txt">' + (m.signal_dbm ?? "-") + " dBm</span>"
+      : "";
+
+    return (
+      '<div class="slot-row' + (hidden ? " slot-hidden" : "") + '">' +
+      '<div class="slot-no">' + s.slot_index + "</div>" +
+      "<div class=\"slot-main\">" +
+        "<div>" +
+          "<b>" + esc(s.phone_number || m.phone_number || "未设置号码") + "</b>" +
+          (s.remark ? '<span class="slot-remark">' + esc(s.remark) + "</span>" : "") +
+          (hidden ? '<span class="tag">已隐藏</span>' : "") +
+        "</div>" +
+        '<div class="slot-tags">' + moduleBadge + simBadge +
+          (m.carrier ? "<span class=\"tag\">" + esc(m.carrier) + "</span>" : "") +
+          (sigHtml ? '<span class="tag">' + sigHtml + "</span>" : "") +
+        "</div>" +
+      "</div>" +
+      '<div class="tag" style="' + (expired ? "color:var(--danger);border-color:#6b2b32" : "") + '">套餐 ' + esc(expire) + "</div>" +
+      (isAdmin
+        ? '<button class="btn btn-sm" data-slot="' + s.id + '">编辑</button>' +
+          '<button class="btn btn-sm btn-ghost" data-toggle="' + s.id + '" data-visible="' +
+          (hidden ? "0" : "1") + '">' + (hidden ? "显示" : "隐藏") + "</button>"
+        : "") +
+      "</div>"
+    );
+  }
+
   function renderDevices() {
     const box = $("#device-list");
     if (!state.devices.length) {
@@ -564,21 +630,13 @@
     box.innerHTML = state.devices
       .map((d) => {
         const online = !!d.online;
-        const slots = (d.slots || [])
-          .map((s) => {
-            const expire = s.plan_expire_at ? s.plan_expire_at.slice(0, 10) : "未设置";
-            const expired = s.plan_expire_at && new Date(s.plan_expire_at) < new Date();
-            return (
-              '<div class="slot-row"><div class="slot-no">' + s.slot_index + "</div>" +
-              "<div>号码 <b>" + esc(s.phone_number || "未设置") + "</b></div>" +
-              "<div class='tag'>" + esc(s.carrier || s.provider || "未知运营商") + "</div>" +
-              '<div class="tag">信号 ' + (s.signal_dbm <= 0 ? s.signal_dbm + " dBm" : "未知") + "</div>" +
-              '<div class="tag" style="' + (expired ? "color:var(--danger);border-color:#6b2b32" : "") + '">套餐到期 ' + esc(expire) + "</div>" +
-              (isAdmin ? '<button class="btn btn-sm" data-slot="' + s.id + '">编辑套餐</button>' : "") +
-              "</div>"
-            );
-          })
-          .join("");
+        const slots = (d.slots || []).map((s) => renderSlot(s, isAdmin)).join("");
+
+        // 模组总览：统计检测到几个模组
+        const modules = d.modules || [];
+        const presentCount = modules.filter((m) => m && m.present).length;
+        const regCount = modules.filter((m) => m && m.registered).length;
+
         return (
           '<div class="card dev-card">' +
           '<div class="dev-head">' +
@@ -587,10 +645,18 @@
           '<span class="dev-id">#' + d.id + "</span>" +
           '<span class="pill">' + (online ? "在线" : "离线") + "</span>" +
           '<span class="pill">固件 v' + esc(d.firmware_version || "-") + "</span>" +
+          (modules.length
+            ? '<span class="pill">模组 ' + presentCount + "/" + modules.length +
+              " · 已注册 " + regCount + "</span>"
+            : "") +
           '<div class="spacer" style="flex:1"></div>' +
           '<button class="btn btn-sm" data-devid="' + d.id + '" data-act="detail">详情</button>' +
-          (isAdmin ? '<button class="btn btn-sm" data-devid="' + d.id + '" data-act="ota">OTA 升级</button>' : "") +
+          (isAdmin
+            ? '<button class="btn btn-sm" data-devid="' + d.id + '" data-act="rename">编辑</button>' +
+              '<button class="btn btn-sm" data-devid="' + d.id + '" data-act="ota">OTA 升级</button>'
+            : "") +
           "</div>" +
+          (d.remark ? '<div class="dev-remark">' + esc(d.remark) + "</div>" : "") +
           '<div class="dev-grid">' +
           kv("网络模式", d.net_mode === "4g" ? "4G 流量" : d.net_mode === "wifi" ? "WiFi" : "-") +
           kv("局域网 IP", d.local_ip || "-") +
@@ -609,13 +675,62 @@
   }
 
   $("#device-list").addEventListener("click", async (ev) => {
-    const btn = ev.target.closest("button[data-act], button[data-slot]");
+    const btn = ev.target.closest("button[data-act], button[data-slot], button[data-toggle]");
     if (!btn) return;
+
+    // 卡槽编辑
     if (btn.dataset.slot) return openSlotEditor(Number(btn.dataset.slot));
+
+    // 卡槽显示/隐藏切换
+    if (btn.dataset.toggle) {
+      const slotId = Number(btn.dataset.toggle);
+      const currentlyVisible = btn.dataset.visible === "1";
+      try {
+        await api("/devices/slots/" + slotId, {
+          method: "PATCH",
+          body: { is_active: !currentlyVisible },
+        });
+        toast(currentlyVisible ? "卡槽已隐藏" : "卡槽已显示", "ok");
+        await loadDevices();
+      } catch (err) {
+        toast(err.message, "err");
+      }
+      return;
+    }
+
     const id = Number(btn.dataset.devid);
     if (btn.dataset.act === "ota") return openOtaDialog(id);
     if (btn.dataset.act === "detail") return openDeviceDetail(id);
+    if (btn.dataset.act === "rename") return openDeviceRename(id);
   });
+
+  /** 编辑设备名称与备注 */
+  function openDeviceRename(deviceId) {
+    const d = state.devices.find((x) => x.id === deviceId);
+    if (!d) return;
+    openModal({
+      title: "编辑设备",
+      sub: "设备 #" + d.id,
+      body:
+        '<div class="field"><label>设备名称</label>' +
+        '<input id="ed-name" value="' + esc(d.device_name || "") + '" placeholder="例如 客厅盒子" /></div>' +
+        '<div class="field"><label>备注</label>' +
+        '<input id="ed-remark" value="' + esc(d.remark || "") + '" placeholder="可选，例如 主力机 / 备用" /></div>',
+      okText: "保存",
+      onOk: async () => {
+        await api("/devices/" + deviceId, {
+          method: "PATCH",
+          body: {
+            device_name: $("#ed-name").value.trim(),
+            remark: $("#ed-remark").value.trim(),
+          },
+        });
+        closeModal();
+        await loadDevices();
+        toast("设备信息已更新", "ok");
+      },
+    });
+  }
 
   $("#btn-dev-refresh").addEventListener("click", loadDevices);
 
@@ -661,6 +776,52 @@
     try {
       const r = await api("/devices/" + id);
       const d = r.device;
+
+      // 每个卡槽的模组详情区块
+      const moduleBlocks = (d.slots || [])
+        .map((s) => {
+          const m = s.module || {};
+          const rows = [];
+          rows.push(["槽位", "卡槽 " + s.slot_index + (s.remark ? "（" + s.remark + "）" : "")]);
+          rows.push(["模组检测", m.present ? "已检测到" : "未检测到"]);
+          rows.push(["模组状态", m.module_state || "-"]);
+          rows.push(["SIM 卡", m.sim_state === "ready" ? "就绪" : "未就绪"]);
+          rows.push([
+            "网络注册",
+            (m.registered ? "已注册" : "未注册") + (m.reg_text ? " · " + m.reg_text : ""),
+          ]);
+          if (m.lac || m.cell_id) rows.push(["LAC / 小区", (m.lac || "-") + " / " + (m.cell_id || "-")]);
+          if (m.rssi_csq !== undefined)
+            rows.push([
+              "信号强度",
+              (m.signal_dbm ?? "-") + " dBm（CSQ " + (m.rssi_csq ?? "-") + "，等级 " + (m.signal_level ?? 0) + "/4）",
+            ]);
+          if (m.carrier) rows.push(["运营商", m.carrier]);
+          if (m.phone_number) rows.push(["本机号码", m.phone_number]);
+          if (m.imsi) rows.push(["IMSI", m.imsi]);
+          if (m.iccid) rows.push(["ICCID", m.iccid]);
+          if (m.imei) rows.push(["IMEI", m.imei]);
+
+          return (
+            '<div class="module-card">' +
+            '<div class="module-title">' +
+            '<span class="slot-no">' + s.slot_index + "</span>" +
+            "<span>" + esc(s.remark || "卡槽 " + s.slot_index) + "</span>" +
+            '<span class="dot ' + (m.registered ? "on" : "off") + '"></span>' +
+            (s.visible === false ? '<span class="tag">已隐藏</span>' : "") +
+            "</div>" +
+            '<table class="module-table">' +
+            rows
+              .map(
+                ([k, v]) =>
+                  "<tr><td>" + esc(k) + "</td><td>" + esc(String(v)) + "</td></tr>"
+              )
+              .join("") +
+            "</table></div>"
+          );
+        })
+        .join("");
+
       openModal({
         title: d.device_name || "设备详情",
         sub: "设备 #" + d.id + " · " + (d.online ? "在线" : "离线"),
@@ -675,12 +836,26 @@
           kv("最后在线", fmtTime(d.last_seen_at)) +
           kv("WebSocket", (d.ws_connections || 0) + " 条") +
           "</div>" +
+          (d.remark ? '<div class="dev-remark" style="margin-top:10px">' + esc(d.remark) + "</div>" : "") +
+          '<h4 class="modal-section">4G 模组</h4>' +
+          (moduleBlocks || '<div class="empty" style="padding:20px">该设备尚未上报模组状态</div>') +
           (state.user.role === "superadmin"
-            ? '<div class="field" style="margin-top:14px"><button class="btn btn-sm btn-danger" id="btn-rotate">重置 Device_Token</button></div>'
+            ? '<div class="field" style="margin-top:14px">' +
+              '<button class="btn btn-sm" id="btn-edit-dev" style="margin-right:8px">编辑设备</button>' +
+              '<button class="btn btn-sm btn-danger" id="btn-rotate">重置 Device_Token</button></div>'
             : ""),
         okText: "关闭",
         onOk: async () => closeModal(),
       });
+
+      const editDev = $("#btn-edit-dev");
+      if (editDev) {
+        editDev.addEventListener("click", () => {
+          closeModal();
+          openDeviceRename(id);
+        });
+      }
+
       const rotate = $("#btn-rotate");
       if (rotate) {
         rotate.addEventListener("click", async () => {
@@ -699,21 +874,35 @@
   function openSlotEditor(slotId) {
     const slot = state.slots.find((s) => s.id === slotId);
     if (!slot) return;
+    const hidden = slot.visible === false;
     openModal({
       title: "编辑卡槽 " + slot.slot_index,
       sub: slot.device_name,
       body:
-        '<div class="field"><label>手机号码</label><input id="es-number" value="' + esc(slot.phone_number || "") + '" /></div>' +
-        '<div class="field"><label>运营商</label><input id="es-carrier" value="' + esc(slot.carrier || "") + '" /></div>' +
-        '<div class="field"><label>套餐名称</label><input id="es-plan" value="' + esc(slot.plan_name || "") + '" /></div>' +
-        '<div class="field"><label>套餐到期日（YYYY-MM-DD）</label><input id="es-expire" type="date" value="' +
-        esc((slot.plan_expire_at || "").slice(0, 10)) + '" /></div>',
+        '<div class="field"><label>备注名称</label>' +
+        '<input id="es-remark" value="' + esc(slot.remark || "") +
+        '" placeholder="例如 主力卡 / 副卡 / 工作号" /></div>' +
+        '<div class="field"><label>手机号码</label>' +
+        '<input id="es-number" value="' + esc(slot.phone_number || "") + '" /></div>' +
+        '<div class="field"><label>运营商</label>' +
+        '<input id="es-carrier" value="' + esc(slot.carrier || "") + '" /></div>' +
+        '<div class="field"><label>套餐名称</label>' +
+        '<input id="es-plan" value="' + esc(slot.plan_name || "") + '" /></div>' +
+        '<div class="field"><label>套餐到期日（YYYY-MM-DD）</label>' +
+        '<input id="es-expire" type="date" value="' +
+        esc((slot.plan_expire_at || "").slice(0, 10)) + '" /></div>' +
+        '<div class="field" style="display:flex;align-items:center;gap:9px">' +
+        '<input id="es-visible" type="checkbox" style="width:auto" ' +
+        (hidden ? "" : "checked") + " />" +
+        "<label style=\"margin:0\">在消息列表中显示此卡槽</label></div>",
       okText: "保存",
       onOk: async () => {
         const body = {
+          remark: $("#es-remark").value.trim(),
           phone_number: $("#es-number").value.trim(),
           carrier: $("#es-carrier").value.trim(),
           plan_name: $("#es-plan").value.trim(),
+          is_active: $("#es-visible").checked,
         };
         const exp = $("#es-expire").value;
         body.plan_expire_at = exp ? exp + "T00:00:00Z" : null;
