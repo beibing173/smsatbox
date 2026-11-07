@@ -134,10 +134,32 @@ bool reportStatus() {
     Modem* m = modemForSlot(i);
     if (m == nullptr) continue;
     JsonObject s = slots.add<JsonObject>();
+
     s["slot_index"] = i;
+
+    // ---- 模组与 SIM ----
+    s["present"] = m->present();
+    s["module_state"] = m->stateName();
+    s["sim_state"] = m->simReady() ? "ready" : "absent";
+
+    // ---- 网络注册 ----
+    s["registered"] = m->registered();
+    s["reg_status"] = m->regStatus();
+    s["reg_text"] = m->regText();
+    if (m->lac().length() > 0) s["lac"] = m->lac();
+    if (m->cellId().length() > 0) s["cell_id"] = m->cellId();
+
+    // ---- 信号 ----
+    s["rssi_csq"] = m->csq();
     s["signal_dbm"] = m->signalDbm();
+    s["signal_level"] = m->signalLevel();
+
+    // ---- 身份 ----
     if (m->phoneNumber().length() > 0) s["phone_number"] = m->phoneNumber();
     if (m->carrier().length() > 0) s["carrier"] = m->carrier();
+    if (m->imsi().length() > 0) s["imsi"] = m->imsi();
+    if (m->iccid().length() > 0) s["iccid"] = m->iccid();
+    if (m->imei().length() > 0) s["imei"] = m->imei();
   }
 
   String body;

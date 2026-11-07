@@ -6,7 +6,7 @@ import sqlite3
 from typing import Any
 
 from ..config import settings
-from ..utils import generate_device_token, parse_iso, utcnow_iso
+from ..utils import generate_device_token, loads, parse_iso, utcnow_iso
 
 
 def device_public(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
@@ -19,7 +19,25 @@ def device_public(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
     data["online"] = bool(data.get("online")) or online
     data["version"] = settings.version
     data.pop("device_token", None)
+
+    # modules_json 是 ESP32 上报的模组快照，解析成数组给前端
+    modules = loads(data.get("modules_json") or "", default=None)
+    data["modules"] = modules if isinstance(modules, list) else []
+    data.pop("modules_json", None)
     return data
+
+
+def _decorate_slot(row: sqlite3.Row | dict[str, Any]) -> dict[str, Any]:
+    """把卡槽行整理成前端友好结构：补 module 详情、明确 visible 语义。"""
+    slot = dict(row)
+    module = loads(slot.get("module_json") or "", default=None)
+    slot["module"] = module if isinstance(module, dict) else {}
+    slot.pop("module_json", None)
+
+    # is_active=1 表示「显示」，0 表示「隐藏」
+    slot["is_active"] = bool(slot.get("is_active", 1))
+    slot["visible"] = slot["is_active"]
+    return slot
 
 
 def slots_for_device(conn: sqlite3.Connection, device_id: int) -> list[dict[str, Any]]:
@@ -27,7 +45,7 @@ def slots_for_device(conn: sqlite3.Connection, device_id: int) -> list[dict[str,
         "SELECT * FROM sim_cards WHERE device_id = ? ORDER BY slot_index",
         (device_id,),
     ).fetchall()
-    return [dict(row) for row in rows]
+    return [_decorate_slot(row) for row in rows]
 
 
 def device_detail(conn: sqlite3.Connection, device_id: int) -> dict[str, Any] | None:

@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS devices (
     last_seen_at     TEXT,
     server_version   TEXT NOT NULL DEFAULT '',
     remark           TEXT NOT NULL DEFAULT '',
+    modules_json     TEXT NOT NULL DEFAULT '',
     created_at       TEXT NOT NULL
 );
 
@@ -74,6 +75,8 @@ CREATE TABLE IF NOT EXISTS sim_cards (
     carrier        TEXT NOT NULL DEFAULT '',
     signal_dbm     INTEGER NOT NULL DEFAULT 99,
     is_active      INTEGER NOT NULL DEFAULT 1,
+    remark         TEXT NOT NULL DEFAULT '',
+    module_json    TEXT NOT NULL DEFAULT '',
     created_at     TEXT NOT NULL,
     UNIQUE (device_id, slot_index)
 );
@@ -236,10 +239,33 @@ def _seed_admin(conn: sqlite3.Connection) -> None:
         )
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """增量迁移：给已有数据库补字段，保证老库升级不丢数据。"""
+
+    def columns(table: str) -> set[str]:
+        rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
+        return {r["name"] for r in rows}
+
+    # v1.1: sim_cards 增加备注
+    card_cols = columns("sim_cards")
+    if "remark" not in card_cols:
+        conn.execute("ALTER TABLE sim_cards ADD COLUMN remark TEXT NOT NULL DEFAULT ''")
+    if "module_json" not in card_cols:
+        conn.execute("ALTER TABLE sim_cards ADD COLUMN module_json TEXT NOT NULL DEFAULT ''")
+
+    # v1.1: devices 增加模组状态快照（JSON 文本，ESP32 上报后原样存）
+    dev_cols = columns("devices")
+    if "modules_json" not in dev_cols:
+        conn.execute("ALTER TABLE devices ADD COLUMN modules_json TEXT NOT NULL DEFAULT ''")
+
+    conn.commit()
+
+
 def init_db(db_path: str | Path | None = None) -> None:
-    """建表 + 种子数据 + 版本记录，可重复调用（幂等）。"""
+    """建表 + 迁移 + 种子数据 + 版本记录，可重复调用（幂等）。"""
     with db_session(db_path) as conn:
         conn.executescript(SCHEMA_SQL)
+        _migrate(conn)
         _seed_admin(conn)
         conn.execute(
             "INSERT INTO schema_meta (key, value) VALUES ('schema_version', ?)"

@@ -81,17 +81,58 @@ class SimCardUpdate(BaseModel):
     plan_expire_at: str | None = None
     carrier: str | None = Field(default=None, max_length=64)
     is_active: bool | None = None
+    remark: str | None = Field(default=None, max_length=120)
 
 
 # --------------------------------------------------------------------------- #
 # 设备上报（ESP32 -> Server）
 # --------------------------------------------------------------------------- #
 class SlotReport(BaseModel):
+    """单个 4G 模组（卡槽）的状态上报。
+
+    字段覆盖「模组是否插卡 / 是否注册网络 / 注册详情 / 运营商 / 信号 / 号码」，
+    便于用户在管理端一眼看出卡槽到底能不能用。
+    """
+
     slot_index: int = Field(ge=1, le=2)
+
+    # ---- 基础 ----
     phone_number: str | None = Field(default=None, max_length=32)
     carrier: str | None = Field(default=None, max_length=64)
     signal_dbm: int | None = Field(default=None, ge=-140, le=0)
     msisdn: str | None = Field(default=None, max_length=32)
+
+    # ---- 模组与 SIM ----
+    # present: 设备是否物理检测到该模组（未接线/未焊 = false）
+    present: bool | None = None
+    # module_state: off / booting / ready / error
+    module_state: str | None = Field(default=None, max_length=16)
+    # sim_state: absent / ready / pin_required / error
+    sim_state: str | None = Field(default=None, max_length=16)
+
+    # ---- 网络注册 ----
+    # registered: 是否已注册到网络
+    registered: bool | None = None
+    # reg_status: 原始 AT+CREG 状态码说明
+    #   0=未注册且未搜索  1=已注册本地网  2=搜索中  3=注册被拒
+    #   4=未知  5=已注册漫游
+    reg_status: int | None = Field(default=None, ge=0, le=5)
+    # reg_text: 人类可读描述，如"已注册（本地网络）"
+    reg_text: str | None = Field(default=None, max_length=32)
+    # lac / cell_id: 位置区码与小区 ID
+    lac: str | None = Field(default=None, max_length=16)
+    cell_id: str | None = Field(default=None, max_length=32)
+
+    # ---- 信号 ----
+    # rssi_csq: 0-31 原始 CSQ，99=未知
+    rssi_csq: int | None = Field(default=None, ge=0, le=99)
+    # signal_level: 0-4 格，便于前端画信号格
+    signal_level: int | None = Field(default=None, ge=0, le=4)
+
+    # ---- 身份识别 ----
+    imsi: str | None = Field(default=None, max_length=32)
+    iccid: str | None = Field(default=None, max_length=32)
+    imei: str | None = Field(default=None, max_length=32)
 
 
 class DeviceReport(BaseModel):

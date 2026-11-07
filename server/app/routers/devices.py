@@ -1,4 +1,4 @@
-﻿"""设备管理、卡槽配置、固件 OTA 下发。"""
+"""设备管理、卡槽配置、固件 OTA 下发。"""
 
 from __future__ import annotations
 
@@ -176,7 +176,14 @@ def update_slot(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "卡槽不存在")
     fields: list[str] = []
     params: list[Any] = []
-    for field in ("phone_number", "provider", "plan_name", "plan_expire_at", "carrier"):
+    for field in (
+        "phone_number",
+        "provider",
+        "plan_name",
+        "plan_expire_at",
+        "carrier",
+        "remark",
+    ):
         value = getattr(payload, field)
         if value is not None:
             fields.append(f"{field} = ?")
@@ -190,7 +197,17 @@ def update_slot(
         conn.commit()
     audit(conn, "slot_update", user_id=admin["id"], target=str(slot_id))
     updated = conn.execute("SELECT * FROM sim_cards WHERE id = ?", (slot_id,)).fetchone()
-    return {"version": settings.version, "slot": dict(updated)}
+    return {
+        "version": settings.version,
+        "slot": device_service_slot(updated),
+    }
+
+
+def device_service_slot(row: sqlite3.Row) -> dict[str, Any]:
+    """把卡槽行转成前端结构（含 module 详情与 visible）。"""
+    from ..services.devices import _decorate_slot
+
+    return _decorate_slot(row)
 
 
 # --------------------------------------------------------------------------- #

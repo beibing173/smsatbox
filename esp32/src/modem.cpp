@@ -180,17 +180,24 @@ void Modem::loop() {
       if (now - lastActionMs_ < 3000) break;
       lastActionMs_ = now;
       if (sendAt("AT", "OK", 1000)) {
-        LOGI("卡槽%d: AT 握手成功", slotIndex_);
+        LOGI("卡槽%d: AT 握手成功，模组存在", slotIndex_);
+        present_ = true;  // ★ 标记模组被检测到
         sendAt("ATE0", "OK", 1000);   // 关回显，减轻串口压力
         sendAt("AT+CMEE=1", "OK", 1000);
         sendAt("AT+CMGF=1", "OK", 1000);  // 文本模式
         sendAt("AT+CNMI=2,1,0,0,0", "OK", 1500);  // +CMTI 提示
         sendAt("AT+CLIP=1", "OK", 1500);          // 来电显示
         sendAt("AT+CPMS=\"SM\",\"SM\",\"SM\"", "OK", 2000);
-        simReady_ = true;
         state_ = MODEM_READY;
+        // ★ 完整探测：SIM 状态、网络注册、身份标识
+        querySimState();
+        queryRegistration();
         queryIdentity();
         querySignal();
+      } else {
+        // 握手失败：模组可能没插/没接线
+        present_ = false;
+        LOGW("卡槽%d: AT 无响应，模组可能未连接", slotIndex_);
       }
       break;
     }
@@ -253,6 +260,147 @@ void Modem::handleLine(const String& line) {
 }
 
 void Modem::handleUrc(const String& line) { handleLine(line); }
+
+// ---------------------------------------------------------------------------
+// 状态查询实现
+// ---------------------------------------------------------------------------
+
+const char* Modem::stateName() const {
+  switch (state_) {
+    case MODEM_OFF:
+      return "off";
+    case MODEM_BOOTING:
+      return "booting";
+    case MODEM_READY:
+      return "ready";
+    case MODEM_ERROR:
+      return "error";
+  }
+  return "error";
+}
+
+String Modem::regText() const {
+  switch (regStatus_) {
+    case 0:
+      return "未注册·未搜索";
+    case 1:
+      return "已注册·本地网络";
+    case 2:
+      return "搜索中";
+    case 3:
+      return "注册被拒绝";
+    case 4:
+      return "未知";
+    case 5:
+      return "已注册·漫游";
+    default:
+      return "未知";
+  }
+}
+
+int Modem::signalLevel() const {
+  if (csq_ < 0 || csq_ > 31) return 0;
+  // 0-31 映射到 0-4 格
+  if (csq_ >= 25) return 4;
+  if (csq_ >= 18) return 3;
+  if (csq_ >= 11) return 2;
+  if (csq_ >= 5) return 1;
+  return 0;
+}
+
+// AT+CREG?  -> +CREG: 0,1,"1A2B","1C2D3E4F"
+void Modem::queryRegistration() {
+  String resp;
+  if (!sendAt("AT+CREG?", "OK", 3000, &resp)) {
+    return;
+  }
+  int pos = resp.indexOf("+CREG:");
+  if (pos < 0) return;
+
+  String body = resp.substring(pos + 6);
+  body.trim();
+
+  // 解析 "0,1,\"1A2B\",\"1C2D3E4F\""
+  int c1 = body.indexOf(',');
+  if (c1 < 0) return;
+  int c2 = body.indexOf(',', c1 + 1);
+
+  String statStr = (c2 > 0) ? body.substring(c1 + 1, c2) : body.substring(c1 + 1);
+  statStr.trim();
+  regStatus_ = statStr.toInt();
+  registered_ = (regStatus_ == 1 || regStatus_ == 5);
+
+  // LAC 与 CellID（可能不带）
+  if (c2 > 0) {
+    String rest = body.substring(c2 + 1);
+    int q1 = rest.indexOf('"');
+    int q2 = rest.indexOf('"', q1 + 1);
+    int q3 = rest.indexOf('"', q2 + 1);
+    int q4 = rest.indexOf('"', q3 + 1);
+    if (q1 >= 0 && q2 > q1) lac_ = rest.substring(q1 + 1, q2);
+    if (q3 >= 0 && q4 > q3) cellId_ = rest.substring(q3 + 1, q4);
+  }
+
+  LOGI("卡槽%d: 网络注册 status=%d(%s) lac=%s cell=%s", slotIndex_, regStatus_,
+       regText().c_str(), lac_.c_str(), cellId_.c_str());
+}
+
+// 查询 SIM 状态与卡内标识
+void Modem::querySimState() {
+  // SIM 就绪检测
+  String resp;
+  if (sendAt("AT+CPIN?", "OK", 3000, &resp)) {
+    simReady_ = resp.indexOf("READY") >= 0;
+  } else {
+    simReady_ = false;
+  }
+
+  // IMSI
+  String imsiResp;
+  if (sendAt("AT+CIMI", "OK", 3000, &imsiResp)) {
+    String v;
+    for (size_t i = 0; i < imsiResp.length(); i++) {
+      char ch = imsiResp[i];
+      if (ch >= '0' && ch <= '9') v += ch;
+    }
+    if (v.length() >= 10) imsi_ = v;
+  }
+
+  // ICCID
+  String iccidResp;
+  if (sendAt("AT+CCID", "OK", 3000, &iccidResp)) {
+    String v;
+    for (size_t i = 0; i < iccidResp.length(); i++) {
+      char ch = iccidResp[i];
+      if (ch >= '0' && ch <= '9') v += ch;
+    }
+    if (v.length() >= 10) iccid_ = v;
+  }
+
+  // IMEI
+  String imeiResp;
+  if (sendAt("AT+GSN", "OK", 3000, &imeiResp)) {
+    String v;
+    for (size_t i = 0; i < imeiResp.length(); i++) {
+      char ch = imeiResp[i];
+      if (ch >= '0' && ch <= '9') v += ch;
+    }
+    if (v.length() >= 10) imei_ = v;
+  }
+
+  LOGI("卡槽%d: SIM=%s imsi=%s iccid=%s imei=%s", slotIndex_,
+       simReady_ ? "READY" : "ABSENT", imsi_.c_str(), iccid_.c_str(),
+       imei_.c_str());
+}
+
+// 一次性刷新全部状态（只在主循环低频调用，避免占用串口）
+void Modem::refreshAll() {
+  if (state_ != MODEM_READY) return;
+  querySignal();
+  queryRegistration();
+  queryIdentity();
+  querySimState();
+}
 
 // "+CMTI: \"SM\",4"  -> 读第 4 条
 void Modem::parseCmti(const String& line) {

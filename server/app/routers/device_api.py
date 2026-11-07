@@ -1,4 +1,4 @@
-﻿"""设备侧 API：ESP32 专用（仅凭 Device_Token 鉴权）。
+"""设备侧 API：ESP32 专用（仅凭 Device_Token 鉴权）。
 
 路由前缀 /api/v1/device
 - POST /report        设备心跳与状态上报
@@ -81,16 +81,36 @@ async def report(
     )
     for slot_report in payload.slots:
         slot = device_service.get_or_create_slot(conn, device["id"], slot_report.slot_index)
+
+        # 基础字段（信号 / 号码 / 运营商）
         fields = ["signal_dbm = ?"]
-        params: list[Any] = [slot_report.signal_dbm if slot_report.signal_dbm is not None else 99]
+        params: list[Any] = [
+            slot_report.signal_dbm if slot_report.signal_dbm is not None else 99
+        ]
         if slot_report.phone_number:
             fields.append("phone_number = ?")
             params.append(slot_report.phone_number)
         if slot_report.carrier:
             fields.append("carrier = ?")
             params.append(slot_report.carrier)
+
+        # 模组详细状态以 JSON 快照形式整块存，便于原样回传前端
+        detail = slot_report.model_dump(exclude_none=True)
+        if detail:
+            fields.append("module_json = ?")
+            params.append(dumps(detail))
+
         params.append(slot["id"])
         conn.execute(f"UPDATE sim_cards SET {', '.join(fields)} WHERE id = ?", params)
+
+    # 整台设备的模组列表快照（前端设备详情用）
+    if payload.slots:
+        snapshot = [s.model_dump(exclude_none=True) for s in payload.slots]
+        conn.execute(
+            "UPDATE devices SET modules_json = ? WHERE id = ?",
+            (dumps(snapshot), device["id"]),
+        )
+
     conn.commit()
     await manager.broadcast_clients(
         "device_status",

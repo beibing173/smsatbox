@@ -35,6 +35,7 @@ static Modem s_modem2(2, MODEM2_UART_NUM, MODEM2_TX_PIN, MODEM2_RX_PIN,
 
 static uint32_t s_lastPollMs = 0;
 static uint32_t s_lastOtaPollMs = 0;
+static uint32_t s_lastModemProbeMs = 0;
 static uint32_t s_bootMs = 0;
 static bool s_lanWebStarted = false;
 
@@ -243,7 +244,14 @@ void loop() {
     pollOta();
   }
 
-  // 7) 指示灯
+  // 7) 定期刷新模组完整状态（SIM/注册/信号/运营商），供云端设备详情展示
+  if (now - s_lastModemProbeMs > 60000UL) {
+    s_lastModemProbeMs = now;
+    s_modem1.refreshAll();
+    s_modem2.refreshAll();
+  }
+
+  // 8) 指示灯
   updateLed();
 
   delay(2);

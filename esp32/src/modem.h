@@ -60,6 +60,40 @@ class Modem {
   /** 立即重新初始化模组（掉线恢复用） */
   void restart();
 
+  // -------------------------------------------------------------------
+  // 状态查询（供上报云端 / 本地调试页展示）
+  // -------------------------------------------------------------------
+
+  /** 模组是否被物理检测到（上电后能 AT 握手成功） */
+  bool present() const { return present_; }
+  /** SIM 卡是否就绪 */
+  bool simReady() const { return simReady_; }
+  /** 是否已注册网络 */
+  bool registered() const { return registered_; }
+  /** AT+CREG 原始状态码：0未注册 1本地注册 2搜索中 3被拒 4未知 5漫游 */
+  int regStatus() const { return regStatus_; }
+  /** 注册状态的中文描述 */
+  String regText() const;
+  /** 位置区码 LAC */
+  const String& lac() const { return lac_; }
+  /** 小区 ID */
+  const String& cellId() const { return cellId_; }
+  /** CSQ 原始值 0-31，99=未知 */
+  int csq() const { return csq_; }
+  /** 信号格数 0-4 */
+  int signalLevel() const;
+  /** IMSI */
+  const String& imsi() const { return imsi_; }
+  /** ICCID */
+  const String& iccid() const { return iccid_; }
+  /** IMEI */
+  const String& imei() const { return imei_; }
+  /** 模组状态名（off/booting/ready/error） */
+  const char* stateName() const;
+
+  /** 主动刷新一次完整状态（会占用串口，约 1-2 秒） */
+  void refreshAll();
+
  private:
   void handleLine(const String& line);
   void handleUrc(const String& line);
@@ -70,6 +104,8 @@ class Modem {
   void readSmsAt(int index);
   void querySignal();
   void queryIdentity();
+  void queryRegistration();
+  void querySimState();
   void parseClip(const String& line);
   void parseCmti(const String& line);
 
@@ -90,6 +126,15 @@ class Modem {
   String carrier_;
   bool simReady_ = false;
   bool registered_ = false;
+
+  // ---- v1.1 新增：完整状态 ----
+  bool present_ = false;      // 模组存在（AT 有响应）
+  int regStatus_ = 4;         // CREG 状态码
+  String lac_;                // 位置区码
+  String cellId_;             // 小区 ID
+  String imsi_;               // SIM 卡 IMSI
+  String iccid_;              // SIM 卡 ICCID
+  String imei_;               // 模组 IMEI
 
   static SmsCallback smsCb_;
   static CallCallback callCb_;
