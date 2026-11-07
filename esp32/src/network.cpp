@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  SMSATBOX · 网络管理实现
 //  ---------------------------------------------------------------------------
 //  "双轨服务机制" 的网络侧：
@@ -31,7 +31,7 @@ void begin() {
   if (cfg.configured && cfg.wifiSsid.length() > 0) {
     connectWifi();
   } else {
-    LOGI("尚未配网，等待进入 AP 配网模式");
+    LOGI("not configured yet");
   }
   s_lastCheck = millis();
 }
@@ -39,7 +39,7 @@ void begin() {
 void connectWifi() {
   const DeviceConfig& cfg = cfg::get();
   if (cfg.wifiSsid.isEmpty()) return;
-  LOGI("正在连接 WiFi: %s", cfg.wifiSsid.c_str());
+  LOGI("connecting wifi: %s", cfg.wifiSsid.c_str());
   WiFi.begin(cfg.wifiSsid.c_str(), cfg.wifiPass.c_str());
   s_wifiConnecting = true;
   s_connectStart = millis();
@@ -53,13 +53,13 @@ void loop() {
     if (WiFi.status() == WL_CONNECTED) {
       s_wifiConnecting = false;
       s_mode = NET_WIFI;
-      LOGI("WiFi 已连接 IP=%s RSSI=%d", WiFi.localIP().toString().c_str(),
+      LOGI("wifi connected ip=%s rssi=%d", WiFi.localIP().toString().c_str(),
            WiFi.RSSI());
       return;
     }
     if (now - s_connectStart > 15000) {
       s_wifiConnecting = false;
-      LOGW("WiFi 连接超时，转入 4G 优先");
+      LOGW("wifi timeout, fallback 4G");
       if (s_mode == NET_NONE) s_mode = NET_4G;
       return;
     }
@@ -71,12 +71,12 @@ void loop() {
 
     if (WiFi.status() == WL_CONNECTED) {
       if (s_mode != NET_WIFI) {
-        LOGI("切换到 WiFi 回传");
+        LOGI("switch to wifi");
         s_mode = NET_WIFI;
       }
     } else {
       if (s_mode == NET_WIFI) {
-        LOGW("WiFi 断开，准备切 4G 回传");
+        LOGW("wifi lost, switch to 4G");
         s_mode = NET_4G;
       }
       // 未配网 / AP 模式时不主动重连，避免与热点冲突
