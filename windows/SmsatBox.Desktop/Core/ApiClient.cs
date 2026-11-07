@@ -223,5 +223,41 @@ public sealed class ApiClient : IDisposable
     public Task<DeviceListResponse> GetDevicesAsync(CancellationToken ct = default)
         => SendAsync<DeviceListResponse>(HttpMethod.Get, "/devices", null, ct);
 
+    /// <summary>修改卡槽：备注 / 号码 / 运营商 / 显示或隐藏。</summary>
+    public async Task UpdateSlotAsync(
+        int slotId,
+        string? remark = null,
+        string? phoneNumber = null,
+        string? carrier = null,
+        string? planName = null,
+        bool? visible = null,
+        CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object>();
+        if (remark is not null) body["remark"] = remark;
+        if (phoneNumber is not null) body["phone_number"] = phoneNumber;
+        if (carrier is not null) body["carrier"] = carrier;
+        if (planName is not null) body["plan_name"] = planName;
+        if (visible is not null) body["is_active"] = visible.Value;
+
+        await SendAsync<JsonElement>(HttpMethod.Patch, $"/devices/slots/{slotId}", body, ct)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>修改设备名称 / 备注（需要超级管理员）。</summary>
+    public async Task UpdateDeviceAsync(
+        int deviceId,
+        string? name = null,
+        string? remark = null,
+        CancellationToken ct = default)
+    {
+        var body = new Dictionary<string, object>();
+        if (name is not null) body["device_name"] = name;
+        if (remark is not null) body["remark"] = remark;
+
+        await SendAsync<JsonElement>(HttpMethod.Patch, $"/devices/{deviceId}", body, ct)
+            .ConfigureAwait(false);
+    }
+
     public void Dispose() => _http.Dispose();
 }
