@@ -24,6 +24,30 @@ data class Message(
     val slotLabel: String get() = slotIndex?.let { "卡槽 $it" } ?: "—"
 }
 
+/** 4G 模组的实时状态（ESP32 上报） */
+data class ModuleStatus(
+    val present: Boolean = false,
+    val moduleState: String = "",
+    val simState: String = "",
+    val registered: Boolean = false,
+    val regStatus: Int = 4,
+    val regText: String = "",
+    val lac: String = "",
+    val cellId: String = "",
+    val csq: Int = 99,
+    val signalDbm: Int? = null,
+    val signalLevel: Int = 0,
+    val carrier: String = "",
+    val phoneNumber: String = "",
+    val imsi: String = "",
+    val iccid: String = "",
+    val imei: String = "",
+) {
+    val hasSignal: Boolean get() = present && csq in 0..31
+    val simReady: Boolean get() = simState == "ready"
+    val moduleReady: Boolean get() = moduleState == "ready"
+}
+
 /** SIM 卡槽 */
 data class SimSlot(
     val id: Int,
@@ -32,8 +56,15 @@ data class SimSlot(
     val carrier: String,
     val signalDbm: Int,
     val planName: String,
-    val planExpireAt: String?
-)
+    val planExpireAt: String?,
+    val remark: String = "",
+    val visible: Boolean = true,
+    val module: ModuleStatus = ModuleStatus(),
+) {
+    /** 优先显示备注，其次号码，最后"卡槽 N" */
+    val displayName: String
+        get() = remark.ifEmpty { phoneNumber.ifEmpty { "卡槽 $slotIndex" } }
+}
 
 /** 设备 */
 data class Device(
@@ -45,6 +76,7 @@ data class Device(
     val localIp: String,
     val wifiRssi: Int,
     val lastSeenAt: String?,
+    val remark: String = "",
     val slots: List<SimSlot>
 )
 
