@@ -44,19 +44,20 @@
 // ---------------------------------------------------------------------------
 #define MODEM_COUNT 2
 
-// --- 卡槽 1：UART1 ---
+// --- 卡槽 1：UART1（GPIO 15/16/17/18）---
 #define MODEM1_UART_NUM 1
 #define MODEM1_TX_PIN 17
 #define MODEM1_RX_PIN 18
 #define MODEM1_EN_PIN 16   // 模组电源使能（PWRKEY）
 #define MODEM1_RST_PIN 15  // 复位
 
-// --- 卡槽 2：UART2 ---
+// --- 卡槽 2：UART2（GPIO 4/1）---
+// 说明：-1 表示该引脚未接线，固件会跳过对应的电平控制。
 #define MODEM2_UART_NUM 2
-#define MODEM2_TX_PIN 9
-#define MODEM2_RX_PIN 10
-#define MODEM2_EN_PIN 8
-#define MODEM2_RST_PIN 7
+#define MODEM2_TX_PIN 4
+#define MODEM2_RX_PIN 1
+#define MODEM2_EN_PIN -1   // 未接 PWRKEY，模组上电即启动
+#define MODEM2_RST_PIN -1  // 未接复位脚
 
 // 状态指示灯（板载 RGB，共阴）
 #define LED_PIN 48
