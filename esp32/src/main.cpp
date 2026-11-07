@@ -1,4 +1,4 @@
-// ============================================================================
+﻿// ============================================================================
 //  SMSATBOX · ESP32-S3 固件主程序
 //  ---------------------------------------------------------------------------
 //  硬件：ESP32-S3 (N16R8) + 双 ML307A-DSLN 4G 模组
@@ -47,10 +47,10 @@ extern void registerModem(Modem* m);
 // ---------------------------------------------------------------------------
 static void onSms(int slotIndex, const String& sender, const String& content,
                   const String& rawAt) {
-  LOGI("[卡槽%d] 短信 %s: %s", slotIndex, sender.c_str(), content.c_str());
+  LOGI("[SLOT%d] SMS %s: %s", slotIndex, sender.c_str(), content.c_str());
   // 立即上报云端；业务侧（验证码提取等）由 Server 负责，设备不解析业务
   if (!cloud::reportMessage("sms", slotIndex, sender, content)) {
-    LOGW("短信上报失败，本条丢失（设备端不缓存业务数据）");
+    LOGW("sms report failed");
   }
 }
 
@@ -58,7 +58,7 @@ static void onSms(int slotIndex, const String& sender, const String& content,
 // 回调：来电
 // ---------------------------------------------------------------------------
 static void onCall(int slotIndex, const String& number) {
-  LOGI("[卡槽%d] 来电 %s", slotIndex, number.c_str());
+  LOGI("[SLOT%d] incoming call %s", slotIndex, number.c_str());
   cloud::reportMessage("call", slotIndex, number, "未接来电");
 }
 
@@ -68,7 +68,7 @@ static void onCall(int slotIndex, const String& number) {
 static void executeCommand(const CloudCommand& cmd) {
   switch (cmd.type) {
     case CMD_SEND_SMS: {
-      LOGI("执行指令 #%d: 卡槽%d 发短信 -> %s", cmd.commandId, cmd.slotIndex,
+      LOGI("exec cmd #%d: slot%d send sms -> %s", cmd.commandId, cmd.slotIndex,
            cmd.targetNumber.c_str());
       Modem* m = modemForSlot(cmd.slotIndex);
       String err;
@@ -82,24 +82,24 @@ static void executeCommand(const CloudCommand& cmd) {
     }
 
     case CMD_OTA: {
-      LOGI("执行 OTA 任务 #%d -> v%s", cmd.taskId, cmd.otaVersion.c_str());
+      LOGI("exec OTA #%d -> v%s", cmd.taskId, cmd.otaVersion.c_str());
       cloud::reportOta(cmd.taskId, "downloading");
       String err;
       bool ok = ota::performUpdate(cmd.otaUrl, cmd.otaMd5, cmd.otaVersion, &err);
       if (ok) {
         cloud::reportOta(cmd.taskId, "success");
-        LOGI("OTA 成功，3 秒后重启进入新固件");
+        LOGI("OTA ok, reboot in 3s");
         delay(3000);
         ESP.restart();
       } else {
         cloud::reportOta(cmd.taskId, "failed", err);
-        LOGE("OTA 失败: %s", err.c_str());
+        LOGE("OTA failed: %s", err.c_str());
       }
       break;
     }
 
     case CMD_SERVER_UPGRADE: {
-      LOGI("设备请求 Server 升级到 v%s", cmd.otaVersion.c_str());
+      LOGI("request server upgrade to v%s", cmd.otaVersion.c_str());
       // 设备只发请求，实际拉取镜像并重启由 Server 侧受控执行
       cloud::requestServerUpgrade(cmd.otaVersion);
       break;
@@ -164,11 +164,11 @@ void setup() {
   digitalWrite(LED_PIN, LOW);
 
   LOGI("==============================================");
-  LOGI(" SMSATBOX 固件 v%s 启动", SMSATBOX_VERSION);
-  LOGI(" 硬件: ESP32-S3 N16R8 + 双 ML307A-DSLN");
+  LOGI(" SMSATBOX firmware v%s boot", SMSATBOX_VERSION);
+  LOGI(" HW: ESP32-S3 N16R8 + 2x ML307A");
   LOGI(" Flash: %u KB  PSRAM: %u KB",
        ESP.getFlashChipSize() / 1024, ESP.getPsramSize() / 1024);
-  LOGI(" 上次重启原因: %d", (int)esp_reset_reason());
+  LOGI(" reset reason: %d", (int)esp_reset_reason());
   LOGI("==============================================");
 
   s_bootMs = millis();
@@ -187,16 +187,16 @@ void setup() {
 
   if (!c.configured) {
     // 3a) 未配网 -> 只开 AP 热点
-    LOGI("设备未配网，进入配网模式");
+    LOGI("not configured, entering setup mode");
     portal::begin();
   } else {
     // 3b) 已配网 -> 连接 WiFi + 初始化云端通信
-    LOGI("设备已配网，连接网络: %s", c.wifiSsid.c_str());
+    LOGI("configured, connecting: %s", c.wifiSsid.c_str());
     net::begin();
     cloud::begin();
   }
 
-  LOGI("setup 完成，耗时 %lu ms", millis() - s_bootMs);
+  LOGI("setup done in %lu ms", millis() - s_bootMs);
 }
 
 // ---------------------------------------------------------------------------
