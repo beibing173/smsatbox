@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 //  SMSATBOX · ML307A-DSLN 驱动实现
 //  ---------------------------------------------------------------------------
 //  设计要点：
@@ -135,6 +135,9 @@ bool Modem::sendAt(const String& cmd, const String& expect, uint32_t timeoutMs,
 
   String acc;
   uint32_t start = millis();
+  bool gotExpect = false;
+  uint32_t expectAt = 0;
+
   while (millis() - start < timeoutMs) {
     while (serial_->available()) {
       char c = static_cast<char>(serial_->read());
@@ -148,7 +151,13 @@ bool Modem::sendAt(const String& cmd, const String& expect, uint32_t timeoutMs,
         }
         // 命令回显，跳过
         if (line == cmd) continue;
-        if (expect.length() && line.indexOf(expect) >= 0) return true;
+        if (expect.length() && line.indexOf(expect) >= 0) {
+          gotExpect = true;
+          expectAt = millis();
+          // 不再立即返回：多读 60ms，把 OK 之前/之后可能还在缓冲区里的行收全
+          // （+CREG: 这类响应有时分多行/延迟到达）
+          continue;
+        }
         if (line == "ERROR" || line.startsWith("+CME ERROR")) return false;
         // 顺手处理插入的 URC
         handleUrc(line);
@@ -156,9 +165,14 @@ bool Modem::sendAt(const String& cmd, const String& expect, uint32_t timeoutMs,
         if (acc.length() < MODEM_LINE_BUFFER) acc.concat(c);
       }
     }
+
+    // 已经拿到期望响应，且安静了 60ms → 认为响应收全
+    if (gotExpect && millis() - expectAt > 60) {
+      return true;
+    }
     delay(2);
   }
-  return false;
+  return gotExpect;
 }
 
 void Modem::loop() {
@@ -177,11 +191,14 @@ void Modem::loop() {
     case MODEM_BOOTING: {
       // 开机后给模组 3 秒缓冲，再试 AT
       if (now - bootStartMs_ < 3000) break;
-      if (now - lastActionMs_ < 3000) break;
+      if (now - lastActionMs_ < retryInterval()) break;
       lastActionMs_ = now;
+
       if (sendAt("AT", "OK", 1000)) {
         LOGI("[SLOT%d] AT handshake OK, modem present", slotIndex_);
-        present_ = true;  // ★ 标记模组被检测到
+        present_ = true;   // 标记模组被检测到
+        everConnected_ = true;
+        absentRounds_ = 0; // 清零缺席计数
         sendAt("ATE0", "OK", 1000);   // 关回显，减轻串口压力
         sendAt("AT+CMEE=1", "OK", 1000);
         sendAt("AT+CMGF=1", "OK", 1000);  // 文本模式
@@ -189,7 +206,7 @@ void Modem::loop() {
         sendAt("AT+CLIP=1", "OK", 1500);          // 来电显示
         sendAt("AT+CPMS=\"SM\",\"SM\",\"SM\"", "OK", 2000);
         state_ = MODEM_READY;
-        // ★ 完整探测：SIM 状态、网络注册、身份标识
+        // 完整探测：SIM 状态、网络注册、身份标识
         querySimState();
         queryRegistration();
         queryIdentity();
@@ -197,7 +214,20 @@ void Modem::loop() {
       } else {
         // 握手失败：模组可能没插/没接线
         present_ = false;
-        LOGW("[SLOT%d] AT timeout - modem not responding (check wiring/power)", slotIndex_);
+        absentRounds_++;
+
+        if (absentRounds_ == 1) {
+          // 第一次失败就提示，方便排查
+          LOGW("[SLOT%d] no response yet (modem may be absent). retrying...", slotIndex_);
+        } else if (absentRounds_ <= 3) {
+          LOGI("[SLOT%d] still absent (%u/3)", slotIndex_, absentRounds_);
+        } else if (absentRounds_ == 4) {
+          // 连续失败多次后降低日志噪音，改为低频重试（不彻底放弃）
+          LOGW("[SLOT%d] slot appears unused. Will keep probing every %us in background.",
+               slotIndex_, RETRY_SLOW_MS / 1000);
+        }
+        // 不进入 ERROR 状态，保持可恢复：
+        // 用户随时插上模组，下一轮探测就能自动接上
       }
       break;
     }
@@ -220,6 +250,24 @@ void Modem::loop() {
             LOGW("[SLOT%d] not registered, re-attach", slotIndex_);
             sendAt("AT+CFUN=1", "OK", 5000);
           }
+          // 顺便刷新注册详情
+          queryRegistration();
+        } else {
+          // AT 有响应但 CREG 查询失败，可能刚掉线，先不动
+        }
+      }
+
+      // ★ 防呆：定期做活跃性检查，模组被拔掉能自动发现并退回探测态
+      static uint32_t lastAlive = 0;
+      if (now - lastAlive > 45000) {
+        lastAlive = now;
+        if (!sendAt("AT", "OK", 800)) {
+          LOGW("[SLOT%d] modem stopped responding, back to probing", slotIndex_);
+          present_ = false;
+          state_ = MODEM_BOOTING;
+          bootStartMs_ = now;
+          lastActionMs_ = 0;
+          absentRounds_ = 1;
         }
       }
       break;
@@ -261,6 +309,16 @@ void Modem::handleLine(const String& line) {
 
 void Modem::handleUrc(const String& line) { handleLine(line); }
 
+// 根据缺席轮次决定重试间隔：
+//   刚开机 / 刚失败   → 3 秒（快速检测）
+//   连续失败 1-3 次    → 10 秒
+//   连续失败 4 次以上  → 60 秒（降低噪音，但永不放弃）
+uint32_t Modem::retryInterval() const {
+  if (absentRounds_ <= 0) return 3000;
+  if (absentRounds_ <= 3) return 10000;
+  return RETRY_SLOW_MS;
+}
+
 // ---------------------------------------------------------------------------
 // 状态查询实现
 // ---------------------------------------------------------------------------
@@ -270,7 +328,8 @@ const char* Modem::stateName() const {
     case MODEM_OFF:
       return "off";
     case MODEM_BOOTING:
-      return "booting";
+      // 长期探测不到就报 absent，前端可以显示「槽位未使用」
+      return absentRounds_ >= 2 ? "absent" : "booting";
     case MODEM_READY:
       return "ready";
     case MODEM_ERROR:
@@ -308,41 +367,102 @@ int Modem::signalLevel() const {
   return 0;
 }
 
-// AT+CREG?  -> +CREG: 0,1,"1A2B","1C2D3E4F"
+// AT+CREG?  -> 常见几种格式：
+//   +CREG: 0,1                 （n=0, stat=1 已注册）
+//   +CREG: 0,1,"1A2B","1C2D3E4F"
+//   +CREG: 1,1                 （有时 n 位丢失/粘连）
+//   +CREG: 11                  （n 与 stat 粘连成一个数）
 void Modem::queryRegistration() {
   String resp;
   if (!sendAt("AT+CREG?", "OK", 3000, &resp)) {
     return;
   }
-  int pos = resp.indexOf("+CREG:");
-  if (pos < 0) return;
 
-  String body = resp.substring(pos + 6);
-  body.trim();
+  // ★ 关键：响应里可能同时有 +CREG: 和 +CGREG:（甚至被粘在同一行）
+  //   必须只取 "+CREG:" 开头的那一行，不能整段搜 indexOf
+  String body;
+  int from = 0;
+  while (from < (int)resp.length()) {
+    int nl = resp.indexOf('\n', from);
+    String line = (nl < 0) ? resp.substring(from) : resp.substring(from, nl);
+    line.trim();
+    from = (nl < 0) ? resp.length() : nl + 1;
 
-  // 解析 "0,1,\"1A2B\",\"1C2D3E4F\""
-  int c1 = body.indexOf(',');
-  if (c1 < 0) return;
-  int c2 = body.indexOf(',', c1 + 1);
+    if (!line.startsWith("+CREG:")) continue;
 
-  String statStr = (c2 > 0) ? body.substring(c1 + 1, c2) : body.substring(c1 + 1);
-  statStr.trim();
-  regStatus_ = statStr.toInt();
-  registered_ = (regStatus_ == 1 || regStatus_ == 5);
+    body = line.substring(6);
+    body.trim();
 
-  // LAC 与 CellID（可能不带）
-  if (c2 > 0) {
-    String rest = body.substring(c2 + 1);
-    int q1 = rest.indexOf('"');
-    int q2 = rest.indexOf('"', q1 + 1);
-    int q3 = rest.indexOf('"', q2 + 1);
-    int q4 = rest.indexOf('"', q3 + 1);
-    if (q1 >= 0 && q2 > q1) lac_ = rest.substring(q1 + 1, q2);
-    if (q3 >= 0 && q4 > q3) cellId_ = rest.substring(q3 + 1, q4);
+    // 若这一行里意外粘了 "+CGREG"，截断掉
+    int cut = body.indexOf("+CG");
+    if (cut > 0) body = body.substring(0, cut);
+    body.trim();
+    break;
   }
 
-  LOGI("[SLOT%d] reg status=%d(%s) lac=%s cell=%s", slotIndex_, regStatus_,
-       regText().c_str(), lac_.c_str(), cellId_.c_str());
+  if (body.isEmpty()) {
+    // 没有 +CREG 行，可能模组没开 CREG 上报
+    LOGW("[SLOT%d] no +CREG line in response", slotIndex_);
+    return;
+  }
+
+  // —— 提取所有逗号分隔的数字字段 ——
+  int nums[4] = {-1, -1, -1, -1};
+  int numCount = 0;
+  int i = 0;
+  while (i < (int)body.length() && numCount < 4) {
+    // 跳过非数字
+    while (i < (int)body.length() && (body[i] < '0' || body[i] > '9')) i++;
+    if (i >= (int)body.length()) break;
+    int start = i;
+    while (i < (int)body.length() && body[i] >= '0' && body[i] <= '9') i++;
+    long v = body.substring(start, i).toInt();
+    if (v >= 0 && v < 100000) {
+      nums[numCount++] = (int)v;
+    }
+  }
+
+  // —— 判定 stat ——
+  // 正常两字段：nums[0]=n, nums[1]=stat
+  // 只有一字段：那个数可能是 stat，也可能是 n*10+stat 的粘连值
+  int stat = -1;
+  if (numCount >= 2) {
+    stat = nums[1];
+  } else if (numCount == 1) {
+    int v = nums[0];
+    if (v >= 0 && v <= 5) {
+      stat = v;              // 直接就是 stat
+    } else if (v >= 10 && v <= 59) {
+      stat = v % 10;         // 粘连：n*10 + stat
+    }
+  }
+
+  // 校验范围，异常时按未注册处理
+  if (stat < 0 || stat > 5) {
+    LOGW("[SLOT%d] cannot parse CREG, raw='%s'", slotIndex_, body.c_str());
+    regStatus_ = 0;
+    registered_ = false;
+    return;
+  }
+
+  regStatus_ = stat;
+  registered_ = (stat == 1 || stat == 5);
+
+  // —— 解析 LAC / CellID（可能存在）——
+  int q1 = body.indexOf('"');
+  if (q1 >= 0) {
+    int q2 = body.indexOf('"', q1 + 1);
+    if (q2 > q1) lac_ = body.substring(q1 + 1, q2);
+    int q3 = body.indexOf('"', q2 + 1);
+    if (q3 >= 0) {
+      int q4 = body.indexOf('"', q3 + 1);
+      if (q4 > q3) cellId_ = body.substring(q3 + 1, q4);
+    }
+  }
+
+  LOGI("[SLOT%d] reg raw='%s' -> stat=%d (%s) lac=%s cell=%s",
+       slotIndex_, body.c_str(), regStatus_, regText().c_str(),
+       lac_.c_str(), cellId_.c_str());
 }
 
 // 查询 SIM 状态与卡内标识
