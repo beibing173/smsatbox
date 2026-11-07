@@ -653,7 +653,8 @@
           '<button class="btn btn-sm" data-devid="' + d.id + '" data-act="detail">详情</button>' +
           (isAdmin
             ? '<button class="btn btn-sm" data-devid="' + d.id + '" data-act="rename">编辑</button>' +
-              '<button class="btn btn-sm" data-devid="' + d.id + '" data-act="ota">OTA 升级</button>'
+              '<button class="btn btn-sm" data-devid="' + d.id + '" data-act="ota">OTA 升级</button>' +
+              '<button class="btn btn-sm btn-danger" data-devid="' + d.id + '" data-act="del">删除</button>'
             : "") +
           "</div>" +
           (d.remark ? '<div class="dev-remark">' + esc(d.remark) + "</div>" : "") +
@@ -702,7 +703,34 @@
     if (btn.dataset.act === "ota") return openOtaDialog(id);
     if (btn.dataset.act === "detail") return openDeviceDetail(id);
     if (btn.dataset.act === "rename") return openDeviceRename(id);
+    if (btn.dataset.act === "del") return confirmDeleteDevice(id);
   });
+
+  /** 删除设备（连带卡槽、消息、OTA 任务一起删，需二次确认） */
+  function confirmDeleteDevice(deviceId) {
+    const d = state.devices.find((x) => x.id === deviceId);
+    if (!d) return;
+    const slotCount = (d.slots || []).length;
+    openModal({
+      title: "删除设备",
+      sub: "此操作不可撤销",
+      body:
+        '<p style="color:var(--text-1);line-height:1.8;margin:0 0 12px">' +
+        "即将删除设备 <b style=\"color:var(--danger)\">" + esc(d.device_name || "未命名设备") + "</b>" +
+        "（#" + d.id + "）</p>" +
+        '<div class="dev-remark" style="border-left-color:var(--danger)">' +
+        "删除后该设备的 " + slotCount + " 个卡槽、全部短信与来电记录、OTA 任务都会一并清除，" +
+        "且<b>无法恢复</b>。设备本身需要重新配网才能再次接入。" +
+        "</div>",
+      okText: "确认删除",
+      onOk: async () => {
+        await api("/devices/" + deviceId, { method: "DELETE" });
+        closeModal();
+        toast("设备已删除", "ok");
+        await loadDevices();
+      },
+    });
+  }
 
   /** 编辑设备名称与备注 */
   function openDeviceRename(deviceId) {
