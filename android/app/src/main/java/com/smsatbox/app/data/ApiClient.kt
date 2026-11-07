@@ -126,6 +126,36 @@ class ApiClient {
     // 设备
     // ------------------------------------------------------------------
 
+    /** 修改卡槽：备注 / 号码 / 运营商 / 显示或隐藏。 */
+    suspend fun updateSlot(
+        slotId: Int,
+        remark: String? = null,
+        phoneNumber: String? = null,
+        carrier: String? = null,
+        planName: String? = null,
+        visible: Boolean? = null,
+    ): JSONObject {
+        val body = JSONObject()
+        remark?.let { body.put("remark", it) }
+        phoneNumber?.let { body.put("phone_number", it) }
+        carrier?.let { body.put("carrier", it) }
+        planName?.let { body.put("plan_name", it) }
+        visible?.let { body.put("is_active", it) }
+        return execute("/devices/slots/$slotId", "PATCH", body)
+    }
+
+    /** 修改设备名称 / 备注（需要超级管理员）。 */
+    suspend fun updateDevice(
+        deviceId: Int,
+        name: String? = null,
+        remark: String? = null,
+    ): JSONObject {
+        val body = JSONObject()
+        name?.let { body.put("device_name", it) }
+        remark?.let { body.put("remark", it) }
+        return execute("/devices/$deviceId", "PATCH", body)
+    }
+
     suspend fun devices(): List<Device> {
         val json = execute("/devices")
         val arr = json.optJSONArray("items") ?: JSONArray()
@@ -155,15 +185,44 @@ class ApiClient {
         isRead = o.optBoolean("is_read")
     )
 
-    private fun parseSlot(o: JSONObject): SimSlot = SimSlot(
-        id = o.optInt("id"),
-        slotIndex = o.optInt("slot_index"),
-        phoneNumber = o.optString("phone_number"),
-        carrier = o.optString("carrier"),
-        signalDbm = o.optInt("signal_dbm", 99),
-        planName = o.optString("plan_name"),
-        planExpireAt = if (o.isNull("plan_expire_at")) null else o.optString("plan_expire_at")
-    )
+    private fun parseSlot(o: JSONObject): SimSlot {
+        val m = o.optJSONObject("module")
+        val module = if (m != null) {
+            ModuleStatus(
+                present = m.optBoolean("present"),
+                moduleState = m.optString("module_state"),
+                simState = m.optString("sim_state"),
+                registered = m.optBoolean("registered"),
+                regStatus = m.optInt("reg_status", 4),
+                regText = m.optString("reg_text"),
+                lac = m.optString("lac"),
+                cellId = m.optString("cell_id"),
+                csq = m.optInt("rssi_csq", 99),
+                signalDbm = if (m.isNull("signal_dbm")) null else m.optInt("signal_dbm"),
+                signalLevel = m.optInt("signal_level"),
+                carrier = m.optString("carrier"),
+                phoneNumber = m.optString("phone_number"),
+                imsi = m.optString("imsi"),
+                iccid = m.optString("iccid"),
+                imei = m.optString("imei"),
+            )
+        } else {
+            ModuleStatus()
+        }
+
+        return SimSlot(
+            id = o.optInt("id"),
+            slotIndex = o.optInt("slot_index"),
+            phoneNumber = o.optString("phone_number"),
+            carrier = o.optString("carrier"),
+            signalDbm = o.optInt("signal_dbm", 99),
+            planName = o.optString("plan_name"),
+            planExpireAt = if (o.isNull("plan_expire_at")) null else o.optString("plan_expire_at"),
+            remark = o.optString("remark"),
+            visible = if (o.has("visible")) o.optBoolean("visible", true) else o.optBoolean("is_active", true),
+            module = module,
+        )
+    }
 
     private fun parseDevice(o: JSONObject): Device {
         val slotsArr = o.optJSONArray("slots") ?: JSONArray()
@@ -180,7 +239,8 @@ class ApiClient {
             localIp = o.optString("local_ip"),
             wifiRssi = o.optInt("wifi_rssi"),
             lastSeenAt = if (o.isNull("last_seen_at")) null else o.optString("last_seen_at"),
-            slots = slots
+            remark = o.optString("remark"),
+            slots = slots,
         )
     }
 }
