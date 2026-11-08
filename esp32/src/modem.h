@@ -42,10 +42,28 @@ class Modem {
   /** 转 dBm 估算值 */
   int signalDbm() const;
 
-  /** SIM 卡号（+CNUM / +CIMI 尽力而为，可能为空） */
+  /** 本机号码（+CNUM / +CIMI 尽力而为，可能为空） */
   const String& phoneNumber() const { return phoneNumber_; }
   /** 运营商名（+COPS） */
   const String& carrier() const { return carrier_; }
+
+  /**
+   * 本机号码所属国家的国际区号（含 +），例如 "+86" / "+1" / "+852"。
+   *
+   * 取值优先级：
+   *   1) 本机号码自带的国际前缀（最准 —— 号码本身写了就是它）
+   *   2) IMSI 的 MCC 查表（卡没写号码时兜底）
+   * 返回空串表示无法判断，此时不补任何区号。
+   */
+  String countryCode() const;
+
+  /**
+   * 把用户输入的目标号码规范化成可发送格式：
+   *   - 已带 "+" → 原样返回（用户显式指定了国际格式，最可靠）
+   *   - 纯数字且符合本国号码特征 → 原样返回（按国内格式发）
+   *   - 纯数字但不像本国号码 → 补本机国家区号
+   */
+  String normalizeNumber(const String& number) const;
 
   /** 发送短信（异步投递，结果通过返回值表示是否成功入队） */
   bool sendSms(const String& number, const String& content, String* error);
@@ -180,6 +198,7 @@ class Modem {
   // ---- v1.3 新增：失联自恢复 + 计时器（不能用 static，否则两个模组会串）----
   bool needHardReset_ = false; // 下次进入探测前先拉 RST 硬复位
   bool extLocked_ = false;     // 被扩展模块（eUICC）占用中
+  int simAbsentRounds_ = 0;    // SIM 连续未检测到的轮次（触发协议栈重启）
   uint32_t lastSignalMs_ = 0;
   uint32_t lastRegMs_ = 0;
   uint32_t lastAliveMs_ = 0;
