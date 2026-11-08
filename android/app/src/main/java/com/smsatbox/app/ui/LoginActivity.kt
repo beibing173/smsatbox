@@ -34,7 +34,7 @@ class LoginActivity : AppCompatActivity() {
 
         applySystemBarStyle()
 
-        binding.versionText.text = "v${BuildConfig.APP_VERSION}"
+        // 版本号只在设置页展示，登录页不再显示
         binding.serverInput.setText(Prefs.serverUrl)
         binding.usernameInput.setText(Prefs.lastUsername)
         binding.passwordInput.setText("")
