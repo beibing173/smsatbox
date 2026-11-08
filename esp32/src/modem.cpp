@@ -227,6 +227,69 @@ void Modem::restart() {
   lastActionMs_ = 0;
 }
 
+// ---------------------------------------------------------------------------
+// 扩展模块独占接口（eUICC APDU 会话用）
+// ---------------------------------------------------------------------------
+bool Modem::lockExtension() {
+  if (serial_ == nullptr) return false;
+  if (state_ != MODEM_READY) return false;
+  if (extLocked_) return false;
+  extLocked_ = true;
+  return true;
+}
+
+void Modem::unlockExtension() {
+  extLocked_ = false;
+  // 解锁后把各类计时器推到当前，避免立刻触发一堆周期性查询
+  uint32_t now = millis();
+  lastAliveMs_ = now;
+  lastSignalMs_ = now;
+}
+
+bool Modem::atRaw(const String& cmd, const String& expect, uint32_t timeoutMs,
+                  String* response) {
+  if (serial_ == nullptr) return false;
+
+  while (serial_->available()) serial_->read();
+  serial_->println(cmd);
+
+  String acc;
+  String collected;
+  uint32_t start = millis();
+  bool gotExpect = false;
+  uint32_t expectAt = 0;
+
+  while (millis() - start < timeoutMs) {
+    while (serial_->available()) {
+      char c = static_cast<char>(serial_->read());
+      if (c == '\n') {
+        String line = trimCrlf(acc);
+        acc = "";
+        if (line.isEmpty()) continue;
+        collected += line;
+        collected += '\n';
+        if (line == cmd) continue;  // 回显
+        if (expect.length() && line.indexOf(expect) >= 0) {
+          gotExpect = true;
+          expectAt = millis();
+          continue;
+        }
+        if (line == "ERROR" || line.startsWith("+CME ERROR")) {
+          if (response) *response = collected;
+          return false;
+        }
+      } else if (c != '\r') {
+        if (acc.length() < MODEM_LINE_BUFFER) acc.concat(c);
+      }
+    }
+    if (gotExpect && millis() - expectAt > 60) break;
+    delay(2);
+  }
+
+  if (response) *response = collected;
+  return gotExpect;
+}
+
 bool Modem::sendAt(const String& cmd, const String& expect, uint32_t timeoutMs,
                    String* response) {
   if (serial_ == nullptr) return false;
@@ -279,6 +342,9 @@ bool Modem::sendAt(const String& cmd, const String& expect, uint32_t timeoutMs,
 
 void Modem::loop() {
   if (serial_ == nullptr || state_ == MODEM_ERROR) return;
+
+  // 被 eUICC 等扩展模块独占时，状态机暂停（串口归它们使用）
+  if (extLocked_) return;
 
   // 1) 先泵串口，URC 随时会来
   pumpBytes(*serial_);
