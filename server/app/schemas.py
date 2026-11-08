@@ -243,3 +243,25 @@ class EuiccToggle(BaseModel):
     """用户手动开关某张 eUICC 的管理功能。"""
 
     user_enabled: bool
+
+
+# --------------------------------------------------------------------------- #
+# eSIM 写卡（RSP 远程配置）
+# --------------------------------------------------------------------------- #
+class EsimDownloadCreate(BaseModel):
+    """Web 提交写卡请求（扫二维码或手动输入激活码）。"""
+
+    device_id: int
+    slot_index: int = Field(default=1, ge=1, le=2)
+    # 完整激活码，格式 LPA:1$smdp.example.com$MATCHING_ID
+    activation_code: str = Field(min_length=10, max_length=512)
+    # SM-DP+ 要求时的确认码，可选
+    confirmation_code: str = Field(default="", max_length=128)
+
+
+class EsimDownloadProgress(BaseModel):
+    """设备/引擎回写写卡进度。"""
+
+    state: Literal["pending", "authenticating", "downloading", "installed", "failed"]
+    progress: str = Field(default="", max_length=2000)
+    error: str = Field(default="", max_length=500)
