@@ -1,4 +1,4 @@
-﻿// ============================================================================
+// ============================================================================
 //  SMSATBOX · ESP32-S3 固件主程序
 //  ---------------------------------------------------------------------------
 //  硬件：ESP32-S3 (N16R8) + 双 ML307A-DSLN 4G 模组
@@ -68,14 +68,24 @@ static void onCall(int slotIndex, const String& number) {
 static void executeCommand(const CloudCommand& cmd) {
   switch (cmd.type) {
     case CMD_SEND_SMS: {
-      LOGI("exec cmd #%d: slot%d send sms -> %s", cmd.commandId, cmd.slotIndex,
-           cmd.targetNumber.c_str());
       Modem* m = modemForSlot(cmd.slotIndex);
-      String err;
       if (m == nullptr) {
-        cloud::reportCommandResult(cmd.commandId, "failed", "卡槽不存在");
+        cloud::reportCommandResult(cmd.commandId, "failed", "slot not found");
         return;
       }
+
+      // ★ 模组未就绪时不执行、也不回写失败：
+      //   保持 pending，等模组初始化完成后下次轮询再执行。
+      //   （设备刚开机时模组需要 20~30 秒启动，不能把指令白白判死）
+      if (!m->isReady()) {
+        LOGW("cmd #%d deferred: slot%d modem not ready yet", cmd.commandId,
+             cmd.slotIndex);
+        return;
+      }
+
+      LOGI("exec cmd #%d: slot%d send sms -> %s", cmd.commandId, cmd.slotIndex,
+           cmd.targetNumber.c_str());
+      String err;
       bool ok = m->sendSms(cmd.targetNumber, cmd.content, &err);
       cloud::reportCommandResult(cmd.commandId, ok ? "sent" : "failed", err);
       break;
@@ -114,6 +124,20 @@ static void executeCommand(const CloudCommand& cmd) {
 // 轮询下行指令（HTTP 兜底通道）
 // ---------------------------------------------------------------------------
 static void pollCommands() {
+  // ★ 所有模组都未就绪时不要拉取指令：
+  //   否则刚开机会把排队中的短信指令拉下来又判死。
+  bool anyReady = false;
+  for (int i = 1; i <= MODEM_COUNT; i++) {
+    Modem* m = modemForSlot(i);
+    if (m != nullptr && m->isReady()) {
+      anyReady = true;
+      break;
+    }
+  }
+  if (!anyReady) {
+    return;
+  }
+
   CloudCommand cmds[4];
   int count = 0;
   if (!cloud::pollCommands(cmds, 4, &count)) {
