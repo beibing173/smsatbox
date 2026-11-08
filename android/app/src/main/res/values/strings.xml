@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">SMSATBOX</string>
     <string name="app_subtitle">短信 / 未接来电 多卡提醒盒子</string>
@@ -55,4 +55,5 @@
     <!-- 通知渠道 -->
     <string name="channel_messages">消息提醒</string>
     <string name="channel_messages_desc">短信与未接来电的实时提醒</string>
+    <string name="nav_esim">eSIM</string>
 </resources>
