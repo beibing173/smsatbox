@@ -54,7 +54,8 @@ class MainActivity : AppCompatActivity() {
         val restoreTab = savedInstanceState?.getInt(KEY_CURRENT_TAB, TAB_MESSAGES)
             ?: TAB_MESSAGES
         switchTab(restoreTab)
-        binding.navView.selectedItemId = tabToMenuId(restoreTab)
+        val menuId = tabToMenuId(restoreTab)
+        if (menuId != 0) binding.navView.selectedItemId = menuId
 
         // 请求通知权限（Android 13+ 才有这个运行时权限）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Notifier.hasPermission(this)) {
@@ -94,10 +95,14 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Tab 序号 -> 底部导航菜单项 id */
+    /**
+     * Tab 序号 -> 底部导航菜单项 id。
+     * eSIM 已不在底部导航里，返回 0 表示「不选中任何项」。
+     */
     private fun tabToMenuId(tab: Int): Int = when (tab) {
         TAB_DEVICES -> R.id.nav_devices
         TAB_SETTINGS -> R.id.nav_settings
+        TAB_ESIM -> 0
         else -> R.id.nav_messages
     }
 
@@ -114,13 +119,9 @@ class MainActivity : AppCompatActivity() {
             TAB_SETTINGS -> settingsFragment
             else -> messagesFragment
         }
-        // 用 show/hide 而非 replace，避免每次切页都重建 View
-        val tx = supportFragmentManager.beginTransaction()
-        listOf(messagesFragment, devicesFragment, esimFragment, settingsFragment).forEach {
-            if (it.isAdded) tx.hide(it)
-        }
-        if (!fragment.isAdded) tx.add(R.id.container, fragment) else tx.show(fragment)
-        tx.commitAllowingStateLoss()
+        supportFragmentManager.beginTransaction()
+            .replace(R.id.container, fragment)
+            .commitAllowingStateLoss()
     }
 
     /** 设置页里点「eSIM 管理」时调用：切到 eSIM 页并把底部导航同步过去 */
