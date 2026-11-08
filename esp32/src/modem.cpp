@@ -484,12 +484,35 @@ void Modem::queryRegistration() {
 
 // 查询 SIM 状态与卡内标识
 void Modem::querySimState() {
-  // SIM 就绪检测
+  // SIM 就绪检测：模组刚开机时 SIM 需要 3~10 秒初始化，
+  // 不能只查一次就判定 ABSENT，这里最多等 12 秒。
   String resp;
-  if (sendAt("AT+CPIN?", "OK", 3000, &resp)) {
-    simReady_ = resp.indexOf("READY") >= 0;
-  } else {
-    simReady_ = false;
+  bool ok = false;
+  simReady_ = false;
+
+  for (int attempt = 0; attempt < 6; attempt++) {
+    resp = "";
+    ok = sendAt("AT+CPIN?", "OK", 3000, &resp);
+    if (ok && resp.indexOf("READY") >= 0) {
+      simReady_ = true;
+      break;
+    }
+    // 没就绪：等 2 秒再试（模组可能需要时间读卡）
+    if (attempt < 5) {
+      delay(2000);
+      pumpBytes(*serial_);
+    }
+  }
+
+  if (!simReady_) {
+    // 等完仍不就绪，把原始响应打出来，方便判断是「没插卡」还是「需要 PIN」
+    String raw = resp;
+    raw.replace("\r", "");
+    raw.replace("\n", " | ");
+    raw.trim();
+    if (raw.length() > 80) raw = raw.substring(0, 80);
+    LOGW("[SLOT%d] SIM not ready after retries (cpin_ok=%d raw='%s')",
+         slotIndex_, ok ? 1 : 0, raw.c_str());
   }
 
   // IMSI
@@ -657,37 +680,85 @@ void Modem::queryIdentity() {
 
 bool Modem::sendSms(const String& number, const String& content, String* error) {
   if (state_ != MODEM_READY) {
-    if (error) *error = "模组未就绪";
+    if (error) *error = "modem not ready";
     return false;
   }
   if (number.length() < 3) {
-    if (error) *error = "号码无效";
+    if (error) *error = "invalid number";
     return false;
   }
   if (content.length() == 0) {
-    if (error) *error = "内容为空";
+    if (error) *error = "empty content";
     return false;
   }
   if (serial_ == nullptr) {
-    if (error) *error = "串口未初始化";
+    if (error) *error = "serial not ready";
     return false;
   }
 
-  // 1) 设置目标号码
-  if (!sendAt("AT+CMGS=\"" + number + "\"", ">", 5000)) {
-    if (error) *error = "number rejected";
-    LOGE("[SLOT%d] CMGS no prompt", slotIndex_);
-    return false;
-  }
+  // ---- 1) 清空串口缓冲 ----
+  while (serial_->available()) serial_->read();
 
-  // 2) 写入正文 + Ctrl-Z 提交
-  serial_->print(content);
-  serial_->write(0x1A);
+  // ---- 2) 发送 AT+CMGS="number" ----
+  String cmd = "AT+CMGS=\"" + number + "\"";
+  serial_->println(cmd);
 
-  // 3) 等 +CMGS: <mr> 与 OK
+  // ---- 3) 逐字节等 '>' 提示符 ----
+  // ★ 关键：CMGS 的 ">" 后面没有换行符，不能按行解析，
+  //   否则永远等不到 '\n'，会误判超时。
+  bool gotPrompt = false;
+  bool gotError = false;
+  String errLine;
   String acc;
   uint32_t start = millis();
+
+  while (millis() - start < 8000) {
+    while (serial_->available()) {
+      char c = static_cast<char>(serial_->read());
+      if (c == '>') {
+        gotPrompt = true;
+        break;
+      }
+      if (c == '\n') {
+        String line = trimCrlf(acc);
+        acc = "";
+        if (line.isEmpty() || line == cmd) continue;
+        if (line == "ERROR" || line.startsWith("+CME ERROR") ||
+            line.startsWith("+CMS ERROR")) {
+          gotError = true;
+          errLine = line;
+          break;
+        }
+      } else if (c != '\r') {
+        if (acc.length() < MODEM_LINE_BUFFER) acc.concat(c);
+      }
+    }
+    if (gotPrompt || gotError) break;
+    delay(2);
+  }
+
+  if (gotError) {
+    if (error) *error = errLine;
+    LOGE("[SLOT%d] CMGS rejected: %s", slotIndex_, errLine.c_str());
+    return false;
+  }
+  if (!gotPrompt) {
+    if (error) *error = "no prompt from modem";
+    LOGE("[SLOT%d] CMGS no prompt (modem did not reply '>')", slotIndex_);
+    return false;
+  }
+
+  // ---- 4) 写入正文 + Ctrl-Z 提交 ----
+  serial_->print(content);
+  serial_->write(0x1A);
+  serial_->flush();
+
+  // ---- 5) 等 +CMGS: <mr> 与 OK ----
+  acc = "";
+  start = millis();
   bool ok = false;
+  String finalErr;
+
   while (millis() - start < 30000) {
     while (serial_->available()) {
       char c = static_cast<char>(serial_->read());
@@ -698,20 +769,24 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
           LOGI("[SLOT%d] SMS submitted %s", slotIndex_, line.c_str());
         } else if (line == "OK") {
           ok = true;
-        } else if (line == "ERROR" || line.startsWith("+CMS ERROR")) {
-          if (error) *error = line;
-          LOGE("[SLOT%d] send failed %s", slotIndex_, line.c_str());
-          return false;
+        } else if (line == "ERROR" || line.startsWith("+CMS ERROR") ||
+                   line.startsWith("+CME ERROR")) {
+          finalErr = line;
         }
       } else if (c != '\r') {
         if (acc.length() < MODEM_LINE_BUFFER) acc.concat(c);
       }
     }
-    if (ok) break;
+    if (ok || finalErr.length() > 0) break;
     delay(5);
   }
 
-  if (!ok && error) *error = "发送超时";
+  if (finalErr.length() > 0) {
+    if (error) *error = finalErr;
+    LOGE("[SLOT%d] send failed %s", slotIndex_, finalErr.c_str());
+    return false;
+  }
+  if (!ok && error) *error = "send timeout";
   if (ok) LOGI("[SLOT%d] SMS sent -> %s", slotIndex_, number.c_str());
   return ok;
 }
