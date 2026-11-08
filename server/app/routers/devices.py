@@ -250,7 +250,7 @@ async def upload_and_push_ota(
         )
 
     md5 = hashlib.md5(data).hexdigest()
-    safe_version = "".join(c for c in version if c.isalnum() or c in ".-_") or "1.0.1"
+    safe_version = "".join(c for c in version if c.isalnum() or c in ".-_") or "1.0.2"
     filename = f"esp32-{safe_version}-{md5[:8]}.bin"
     target = settings.firmware_dir / filename
     target.write_bytes(data)
