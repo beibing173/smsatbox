@@ -1,0 +1,269 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="1250" viewBox="0 0 1760 1250">
+  <style>
+    .bg { fill: #fbfcfe; }
+    .grid { stroke: #eef3f9; stroke-width: 1; }
+    .blk {
+      fill: #ffffff; stroke: #2b4a6f; stroke-width: 2;
+    }
+    .title { font: 700 22px "Microsoft YaHei", sans-serif; fill: #12243a; }
+    .sub { font: 400 12px "Microsoft YaHei", sans-serif; fill: #5a7186; }
+    .h2 { font: 700 15px "Microsoft YaHei", sans-serif; fill: #12243a; }
+    .h3 { font: 700 13px "Microsoft YaHei", sans-serif; fill: #1a4a7a; }
+    .pin { font: 400 11px "Consolas", monospace; fill: #24384f; }
+    .pinlbl { font: 400 10px "Microsoft YaHei", sans-serif; fill: #5a7186; }
+    .wire-pwr { stroke: #d93025; stroke-width: 3; fill: none; }
+    .wire-sim { stroke: #e37400; stroke-width: 2.2; fill: none; }
+    .dot-pwr { fill: #d93025; }
+    .note { font: 400 11px "Microsoft YaHei", sans-serif; fill: #8a6d3b; }
+  </style>
+
+  <rect class="bg" width="1760" height="1250"/>
+
+  <!-- 网格 -->
+  <g class="grid">
+    <path d="M0 120 H1760 M0 240 H1760 M0 360 H1760 M0 480 H1760 M0 600 H1760
+             M0 720 H1760 M0 840 H1760 M0 960 H1760 M0 1080 H1760 M0 1200 H1760"/>
+    <path d="M120 0 V1250 M240 0 V1250 M360 0 V1250 M480 0 V1250 M600 0 V1250
+             M720 0 V1250 M840 0 V1250 M960 0 V1250 M1080 0 V1250 M1200 0 V1250
+             M1320 0 V1250 M1440 0 V1250 M1560 0 V1250 M1680 0 V1250"/>
+  </g>
+
+  <text x="40" y="46" class="title">SMSATBOX 双模组底板 · 原理图 v1.0.6</text>
+  <text x="40" y="70" class="sub">ESP32-S3 N16R8 + 2× ML307A (DSLN/GFLN) + 2× eUICC 卡座 · 5V 输入</text>
+
+  <!-- ================= ① 电源 ================= -->
+  <rect x="40" y="92" width="380" height="360" rx="8" class="blk"/>
+  <text x="58" y="120" class="h2">① 电源</text>
+
+  <rect x="62" y="140" width="130" height="60" rx="6" fill="#fff" stroke="#2b4a6f" stroke-width="1.6"/>
+  <text x="127" y="164" text-anchor="middle" class="h3">USB-C 5V</text>
+  <text x="127" y="184" text-anchor="middle" class="pinlbl">≥ 3A 适配器</text>
+
+  <rect x="62" y="222" width="130" height="48" rx="6" fill="#fff" stroke="#2b4a6f" stroke-width="1.6"/>
+  <text x="127" y="242" text-anchor="middle" class="h3">F1 保险丝</text>
+  <text x="127" y="260" text-anchor="middle" class="pinlbl">2A 自恢复</text>
+
+  <rect x="62" y="292" width="130" height="58" rx="6" fill="#fff" stroke="#2b4a6f" stroke-width="1.6"/>
+  <text x="127" y="312" text-anchor="middle" class="h3">D1 TVS</text>
+  <text x="127" y="330" text-anchor="middle" class="pinlbl">SMBJ5.0A</text>
+  <text x="127" y="346" text-anchor="middle" class="pinlbl">C1 1000µF/10V</text>
+
+  <rect x="232" y="140" width="176" height="94" rx="6" fill="#fff" stroke="#2b4a6f" stroke-width="1.6"/>
+  <text x="320" y="164" text-anchor="middle" class="h3">U1 降压 DC-DC</text>
+  <text x="320" y="184" text-anchor="middle" class="pinlbl">MP1584EN 模块</text>
+  <text x="320" y="202" text-anchor="middle" class="pinlbl">5V → 3.8V / ≥ 4A</text>
+  <text x="320" y="220" text-anchor="middle" class="pinlbl">供两个 ML307A</text>
+
+  <circle cx="320" cy="272" r="5" class="dot-pwr"/>
+  <text x="320" y="296" text-anchor="middle" class="pin">+3.8V (VBAT)</text>
+
+  <rect x="232" y="318" width="176" height="76" rx="6" fill="#fff" stroke="#2b4a6f" stroke-width="1.6"/>
+  <text x="320" y="342" text-anchor="middle" class="h3">ESP32 供电</text>
+  <text x="320" y="362" text-anchor="middle" class="pinlbl">5V 直供 VIN</text>
+  <text x="320" y="380" text-anchor="middle" class="pinlbl">（板载 LDO 转 3.3V）</text>
+
+  <path class="wire-pwr" d="M192 170 H232"/>
+  <path class="wire-pwr" d="M127 200 V222"/>
+  <path class="wire-pwr" d="M127 270 V292"/>
+  <path class="wire-pwr" d="M192 316 H232"/>
+  <path class="wire-pwr" d="M320 234 V272"/>
+  <path class="wire-pwr" d="M320 272 V318"/>
+
+  <text x="62" y="416" class="note">⚠ 两模组发射峰值各约 2A</text>
+  <text x="62" y="434" class="note">   DC-DC 必须 ≥ 4A</text>
+  <text x="62" y="452" class="note">   模组 VBAT 就近放</text>
+  <text x="62" y="470" class="note">   100µF+1µF+100nF</text>
+
+  <!-- ================= ② ESP32-S3 ================= -->
+  <rect x="452" y="92" width="348" height="700" rx="8" class="blk"/>
+  <text x="470" y="120" class="h2">② ESP32-S3 N16R8 开发板</text>
+  <text x="470" y="142" class="sub">DevKitC-1 · 40pin · 2.54mm</text>
+
+  <rect x="486" y="158" width="280" height="596" rx="4" fill="none"
+        stroke="#c6dbf0" stroke-width="1" stroke-dasharray="4 3"/>
+
+  <!-- 左列 -->
+  <g class="pin">
+    <text x="498" y="184">3V3</text>
+    <text x="498" y="216">EN</text>
+    <text x="498" y="248">GPIO4</text>
+    <text x="498" y="280">GPIO5</text>
+    <text x="498" y="312">GPIO6</text>
+    <text x="498" y="344">GPIO7</text>
+    <text x="498" y="376">GPIO15</text>
+    <text x="498" y="408">GPIO16</text>
+    <text x="498" y="440">GPIO17</text>
+    <text x="498" y="472">GPIO18</text>
+    <text x="498" y="504">GPIO8</text>
+    <text x="498" y="536">GPIO3</text>
+    <text x="498" y="568">GPIO46</text>
+    <text x="498" y="600">GPIO9</text>
+    <text x="498" y="632">GPIO10</text>
+    <text x="498" y="664">GPIO11</text>
+    <text x="498" y="696">GPIO12</text>
+    <text x="498" y="728">GND / 5V</text>
+  </g>
+  <!-- 左列功能说明（独立一列，不重叠） -->
+  <g class="pinlbl">
+    <text x="566" y="184">→ 逻辑参考</text>
+    <text x="566" y="248">→ 运行指示灯</text>
+    <text x="566" y="376">→ MODEM1 RST</text>
+    <text x="566" y="408">→ MODEM1 PWRKEY</text>
+    <text x="566" y="440">→ MODEM1 TX</text>
+    <text x="566" y="472">→ MODEM1 RX</text>
+    <text x="566" y="600">→ MODEM2 TX</text>
+    <text x="566" y="632">→ MODEM2 RX</text>
+    <text x="566" y="696">→ MODEM2 PWRKEY</text>
+    <text x="566" y="728">→ MODEM2 RST</text>
+  </g>
+
+  <!-- 右列 -->
+  <g class="pin">
+    <text x="754" y="184" text-anchor="end">3V3</text>
+    <text x="754" y="216" text-anchor="end">GND</text>
+    <text x="754" y="248" text-anchor="end">GPIO19</text>
+    <text x="754" y="280" text-anchor="end">GPIO20</text>
+    <text x="754" y="312" text-anchor="end">GPIO42</text>
+    <text x="754" y="344" text-anchor="end">GPIO41</text>
+    <text x="754" y="376" text-anchor="end">GPIO40</text>
+    <text x="754" y="408" text-anchor="end">GPIO39</text>
+    <text x="754" y="440" text-anchor="end">GPIO38</text>
+    <text x="754" y="472" text-anchor="end">GPIO37</text>
+    <text x="754" y="504" text-anchor="end">GPIO36</text>
+    <text x="754" y="536" text-anchor="end">GPIO35</text>
+    <text x="754" y="568" text-anchor="end">GPIO34</text>
+    <text x="754" y="600" text-anchor="end">GPIO33</text>
+    <text x="754" y="632" text-anchor="end">GPIO26</text>
+    <text x="754" y="664" text-anchor="end">GPIO25</text>
+    <text x="754" y="696" text-anchor="end">GPIO24</text>
+    <text x="754" y="728" text-anchor="end">GPIO23</text>
+  </g>
+
+  <text x="470" y="770" class="note">引脚分配与固件 config.h 完全一致</text>
+
+  <!-- ================= ③ 模组 1 ================= -->
+  <rect x="828" y="92" width="350" height="330" rx="8" class="blk"/>
+  <text x="846" y="120" class="h2">③ ML307A 模组 1（卡槽 1）</text>
+  <text x="846" y="142" class="sub">LCC44+LGA50 · 17.7×15.8×2.4mm</text>
+
+  <rect x="848" y="160" width="140" height="230" rx="6" fill="#f4f8fd" stroke="#2b4a6f" stroke-width="1.8"/>
+  <text x="918" y="186" text-anchor="middle" class="h3">ML307A</text>
+  <text x="918" y="206" text-anchor="middle" class="pinlbl">DSLN / GFLN</text>
+  <text x="918" y="224" text-anchor="middle" class="pinlbl">LTE Cat.1</text>
+  <text x="918" y="262" text-anchor="middle" class="pinlbl">VBAT ×4</text>
+  <text x="918" y="282" text-anchor="middle" class="pinlbl">GND ×多</text>
+  <text x="918" y="316" text-anchor="middle" class="pinlbl">UART / SIM</text>
+  <text x="918" y="336" text-anchor="middle" class="pinlbl">PWRKEY / RESET</text>
+  <text x="918" y="368" text-anchor="middle" class="pinlbl">ANT_MAIN</text>
+
+  <rect x="1012" y="160" width="150" height="56" rx="5" fill="#fff" stroke="#e37400" stroke-width="1.6"/>
+  <text x="1087" y="182" text-anchor="middle" class="h3">SIM1 卡座</text>
+  <text x="1087" y="202" text-anchor="middle" class="pinlbl">Nano / 推拉式</text>
+
+  <rect x="1012" y="232" width="150" height="50" rx="5" fill="#fff" stroke="#1f6feb" stroke-width="1.6"/>
+  <text x="1087" y="252" text-anchor="middle" class="h3">ANT1 IPEX</text>
+  <text x="1087" y="270" text-anchor="middle" class="pinlbl">U.FL 座</text>
+
+  <rect x="1012" y="298" width="150" height="60" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+  <text x="1087" y="318" text-anchor="middle" class="h3">去耦</text>
+  <text x="1087" y="338" text-anchor="middle" class="pinlbl">100µF + 1µF</text>
+  <text x="1087" y="354" text-anchor="middle" class="pinlbl">+ 100nF</text>
+
+  <path class="wire-pwr" d="M320 272 H410 V128 H848"/>
+  <path class="wire-sim" d="M988 188 H1012"/>
+
+  <text x="846" y="410" class="note">PWRKEY：GPIO16 拉高 800ms 开机</text>
+
+  <!-- ================= ④ 模组 2 ================= -->
+  <rect x="828" y="442" width="350" height="330" rx="8" class="blk"/>
+  <text x="846" y="470" class="h2">④ ML307A 模组 2（卡槽 2）</text>
+  <text x="846" y="492" class="sub">与模组 1 完全对称</text>
+
+  <rect x="848" y="510" width="140" height="230" rx="6" fill="#f4f8fd" stroke="#2b4a6f" stroke-width="1.8"/>
+  <text x="918" y="536" text-anchor="middle" class="h3">ML307A</text>
+  <text x="918" y="556" text-anchor="middle" class="pinlbl">DSLN / GFLN</text>
+  <text x="918" y="574" text-anchor="middle" class="pinlbl">LTE Cat.1</text>
+  <text x="918" y="612" text-anchor="middle" class="pinlbl">VBAT ×4</text>
+  <text x="918" y="632" text-anchor="middle" class="pinlbl">GND ×多</text>
+  <text x="918" y="666" text-anchor="middle" class="pinlbl">UART / SIM</text>
+  <text x="918" y="686" text-anchor="middle" class="pinlbl">PWRKEY / RESET</text>
+  <text x="918" y="718" text-anchor="middle" class="pinlbl">ANT_MAIN</text>
+
+  <rect x="1012" y="510" width="150" height="56" rx="5" fill="#fff" stroke="#e37400" stroke-width="1.6"/>
+  <text x="1087" y="532" text-anchor="middle" class="h3">SIM2 卡座</text>
+  <text x="1087" y="552" text-anchor="middle" class="pinlbl">Nano / 推拉式</text>
+
+  <rect x="1012" y="582" width="150" height="50" rx="5" fill="#fff" stroke="#1f6feb" stroke-width="1.6"/>
+  <text x="1087" y="602" text-anchor="middle" class="h3">ANT2 IPEX</text>
+  <text x="1087" y="620" text-anchor="middle" class="pinlbl">U.FL 座</text>
+
+  <rect x="1012" y="648" width="150" height="60" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+  <text x="1087" y="668" text-anchor="middle" class="h3">去耦</text>
+  <text x="1087" y="688" text-anchor="middle" class="pinlbl">100µF + 1µF</text>
+  <text x="1087" y="704" text-anchor="middle" class="pinlbl">+ 100nF</text>
+
+  <path class="wire-pwr" d="M320 272 H410 V478 H848"/>
+  <path class="wire-sim" d="M988 538 H1012"/>
+
+  <text x="846" y="760" class="note">PWRKEY：GPIO21 拉高 800ms 开机</text>
+
+  <!-- ================= ⑤ UART ================= -->
+  <rect x="1206" y="92" width="500" height="330" rx="8" class="blk"/>
+  <text x="1224" y="120" class="h2">⑤ UART 与电平</text>
+
+  <text x="1224" y="152" class="h3">模组 1</text>
+  <g class="pin">
+    <text x="1224" y="178">MODEM1_TX  GPIO17  ──→  RXD</text>
+    <text x="1224" y="204">MODEM1_RX  GPIO18  ←──  TXD</text>
+    <text x="1224" y="230">MODEM1_EN  GPIO16  ──→  PWRKEY</text>
+    <text x="1224" y="256">MODEM1_RST GPIO15  ──→  RESET</text>
+  </g>
+
+  <text x="1224" y="296" class="h3">模组 2</text>
+  <g class="pin">
+    <text x="1224" y="322">MODEM2_TX  GPIO9   ──→  RXD</text>
+    <text x="1224" y="348">MODEM2_RX  GPIO10  ←──  TXD</text>
+    <text x="1224" y="374">MODEM2_EN  GPIO21  ──→  PWRKEY</text>
+    <text x="1224" y="400">MODEM2_RST GPIO47  ──→  RESET</text>
+  </g>
+
+  <text x="1224" y="410" class="note" visibility="hidden">.</text>
+
+  <!-- ================= ⑥ 指示灯 ================= -->
+  <rect x="1206" y="442" width="500" height="230" rx="8" class="blk"/>
+  <text x="1224" y="470" class="h2">⑥ 指示灯</text>
+  <g class="pin">
+    <text x="1224" y="502">D2 电源灯   5V → R1 1kΩ → LED → GND</text>
+    <text x="1224" y="528">D3 运行灯   GPIO4 → R2 470Ω → LED → GND</text>
+    <text x="1224" y="554">D4 4G1 灯   模组1 NETLIGHT → R3 1kΩ → LED</text>
+    <text x="1224" y="580">D5 4G2 灯   模组2 NETLIGHT → R4 1kΩ → LED</text>
+  </g>
+  <text x="1224" y="620" class="note">NETLIGHT 引脚不同批次可能不同，可省略；</text>
+  <text x="1224" y="640" class="note">也可用固件里的 WS2812（GPIO48）做状态灯。</text>
+
+  <!-- ================= ⑦ 设计说明 ================= -->
+  <rect x="40" y="812" width="1666" height="240" rx="8" class="blk"/>
+  <text x="58" y="842" class="h2">⑦ 关键设计说明</text>
+
+  <g class="pinlbl">
+    <text x="58" y="874">1. VBAT 必须在模组引脚就近布置 100µF 电解 + 1µF 陶瓷 + 100nF 高频电容，否则发射瞬间掉压重启。</text>
+    <text x="58" y="902">2. 天线走线 50Ω 阻抗，尽量短；IPEX 座旁留 π 型匹配网络（0Ω / NC 可选）。</text>
+    <text x="58" y="930">3. SIM 走线：DATA 上拉 4.7kΩ 到 SIM_VDD，CLK 串 22Ω 抗干扰，四线尽量等长。</text>
+    <text x="58" y="958">4. ESP32 与模组 VBAT 分开走线，避免模组发射电流拉低电压导致 ESP32 复位。</text>
+    <text x="58" y="986">5. 建议 4 层板（TOP / GND / PWR / BOTTOM），GND 完整铺铜；2 层板也能跑但射频略差。</text>
+    <text x="58" y="1014">6. 模组正下方开散热过孔阵列，ML307A 发射时会明显发热。</text>
+    <text x="58" y="1042">7. 四角 M3 螺丝孔（φ3.2mm），配 φ3.8mm 铜柱安装孔。</text>
+  </g>
+
+  <!-- ================= ⑧ 机械尺寸 ================= -->
+  <rect x="40" y="1072" width="1666" height="150" rx="8" class="blk"/>
+  <text x="58" y="1102" class="h2">⑧ 机械尺寸</text>
+  <g class="pinlbl">
+    <text x="58" y="1134">PCB：120mm × 90mm × 1.6mm，2 层或 4 层</text>
+    <text x="58" y="1162">M3 螺丝孔：距边 5mm，中心坐标 (5,5) (115,5) (5,85) (115,85)</text>
+    <text x="58" y="1190">整机外壳：125mm × 95mm × 32mm（3D 打印，见 case.scad）</text>
+  </g>
+
+  <text x="40" y="1244" class="sub">SMSATBOX Hardware Design · v1.0.6 · 2026-11-08</text>
+</svg>
