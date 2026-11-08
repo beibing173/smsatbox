@@ -80,6 +80,14 @@
                         </StackPanel>
                     </RadioButton>
 
+                    <RadioButton x:Name="NavEsim" Style="{StaticResource Nav.Item}" GroupName="Nav"
+                                 Checked="OnNavChecked" Tag="esim">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="💳" Margin="0,0,9,0" FontSize="14" />
+                            <TextBlock Text="eSIM 管理" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </RadioButton>
+
                     <RadioButton x:Name="NavSettings" Style="{StaticResource Nav.Item}" GroupName="Nav"
                                  Checked="OnNavChecked" Tag="settings">
                         <StackPanel Orientation="Horizontal">
