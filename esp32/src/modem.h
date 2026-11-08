@@ -104,6 +104,10 @@ class Modem {
   /** PDU 模式发送（中文短信专用） */
   bool sendSmsPdu(const String& number, const String& content, String* error);
 
+  /** PDU 单次发送（调用前需先 AT+CMGF=0） */
+  bool sendSmsPduOnce(const String& number, const String& ucs2,
+                      const String& smscNumber, bool forceIntl, String* error);
+
   void handleLine(const String& line);
   void handleUrc(const String& line);
   bool sendAt(const String& cmd, const String& expect, uint32_t timeoutMs,
