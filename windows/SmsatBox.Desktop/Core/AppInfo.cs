@@ -10,13 +10,13 @@ public static class AppInfo
     public const string Tagline = "短信 / 未接来电 多卡提醒盒子";
 
     /// <summary>当前版本（与仓库根目录 VERSION 文件保持一致）。</summary>
-    public const string Version = "1.0.5";
+    public const string Version = "1.0.6";
 
     /// <summary>底部版本号展示用。</summary>
     public static string VersionLabel => "v" + Version;
 
     /// <summary>请求头 X-Client-Version 用的客户端协议版本。</summary>
-    public const string ClientVersion = "1.0.5";
+    public const string ClientVersion = "1.0.6";
 
     /// <summary>请求头 X-Client-Platform。</summary>
     public const string Platform = "windows";
