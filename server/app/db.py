@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS devices (
     device_token     TEXT NOT NULL UNIQUE,
     device_name      TEXT NOT NULL DEFAULT '',
     hardware_model   TEXT NOT NULL DEFAULT 'ESP32-S3-N16R8',
-    firmware_version TEXT NOT NULL DEFAULT '1.0.0',
+    firmware_version TEXT NOT NULL DEFAULT '1.0.1',
     local_ip         TEXT NOT NULL DEFAULT '',
     wifi_rssi        INTEGER NOT NULL DEFAULT 0,
     net_mode         TEXT NOT NULL DEFAULT 'wifi',
