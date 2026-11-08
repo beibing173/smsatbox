@@ -61,6 +61,30 @@ class Modem {
   void restart();
 
   // -------------------------------------------------------------------
+  // 扩展模块独占接口（eUICC / eSIM 管理使用）
+  // -------------------------------------------------------------------
+
+  /**
+   * 申请独占串口。成功后 Modem 状态机暂停推进，直到 unlockExtension。
+   * 用于 eUICC 的 APDU 会话（CCHO/CGLA/CCHC 一整串必须原子执行）。
+   * 返回 false 表示模组未就绪或已被占用。
+   */
+  bool lockExtension();
+
+  /** 释放独占 */
+  void unlockExtension();
+
+  /** 是否正被扩展模块占用 */
+  bool extensionLocked() const { return extLocked_; }
+
+  /**
+   * 发送 AT 指令（仅供已持有独占锁的扩展模块使用）。
+   * 不处理 URC、不清缓冲之外的状态，纯收发。
+   */
+  bool atRaw(const String& cmd, const String& expect, uint32_t timeoutMs,
+             String* response);
+
+  // -------------------------------------------------------------------
   // 状态查询（供上报云端 / 本地调试页展示）
   // -------------------------------------------------------------------
 
@@ -155,6 +179,7 @@ class Modem {
 
   // ---- v1.3 新增：失联自恢复 + 计时器（不能用 static，否则两个模组会串）----
   bool needHardReset_ = false; // 下次进入探测前先拉 RST 硬复位
+  bool extLocked_ = false;     // 被扩展模块（eUICC）占用中
   uint32_t lastSignalMs_ = 0;
   uint32_t lastRegMs_ = 0;
   uint32_t lastAliveMs_ = 0;
