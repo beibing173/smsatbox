@@ -27,6 +27,9 @@ class MainActivity : AppCompatActivity() {
     private val esimFragment by lazy { EsimFragment() }
     private val settingsFragment by lazy { SettingsFragment() }
 
+    /** 当前 Tab，用于夜间模式重建 Activity 后恢复 */
+    private var currentTab: Int = TAB_MESSAGES
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -45,9 +48,13 @@ class MainActivity : AppCompatActivity() {
         // 底部版本号（要求：三端布局一致，底部标注版本号）
         binding.versionText.text = "v${BuildConfig.APP_VERSION}"
 
-        if (savedInstanceState == null) {
-            switchTab(TAB_MESSAGES)
-        }
+        // 注意：切换深浅主题会让 AppCompat 重建 Activity。
+        // 必须把当前 Tab 存进 savedInstanceState，否则重建后
+        // 内容区回到默认页、而底部导航还停在上一次的选中项。
+        val restoreTab = savedInstanceState?.getInt(KEY_CURRENT_TAB, TAB_MESSAGES)
+            ?: TAB_MESSAGES
+        switchTab(restoreTab)
+        binding.navView.selectedItemId = tabToMenuId(restoreTab)
 
         // 请求通知权限（Android 13+ 才有这个运行时权限）
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && !Notifier.hasPermission(this)) {
@@ -81,24 +88,46 @@ class MainActivity : AppCompatActivity() {
             when (item.itemId) {
                 R.id.nav_messages -> { switchTab(TAB_MESSAGES); true }
                 R.id.nav_devices -> { switchTab(TAB_DEVICES); true }
-                R.id.nav_esim -> { switchTab(TAB_ESIM); true }
                 R.id.nav_settings -> { switchTab(TAB_SETTINGS); true }
                 else -> false
             }
         }
-        binding.navView.selectedItemId = R.id.nav_messages
+    }
+
+    /** Tab 序号 -> 底部导航菜单项 id */
+    private fun tabToMenuId(tab: Int): Int = when (tab) {
+        TAB_DEVICES -> R.id.nav_devices
+        TAB_SETTINGS -> R.id.nav_settings
+        else -> R.id.nav_messages
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt(KEY_CURRENT_TAB, currentTab)
     }
 
     private fun switchTab(tab: Int) {
+        currentTab = tab
         val fragment: Fragment = when (tab) {
             TAB_DEVICES -> devicesFragment
             TAB_ESIM -> esimFragment
             TAB_SETTINGS -> settingsFragment
             else -> messagesFragment
         }
-        supportFragmentManager.beginTransaction()
-            .replace(R.id.container, fragment)
-            .commit()
+        // 用 show/hide 而非 replace，避免每次切页都重建 View
+        val tx = supportFragmentManager.beginTransaction()
+        listOf(messagesFragment, devicesFragment, esimFragment, settingsFragment).forEach {
+            if (it.isAdded) tx.hide(it)
+        }
+        if (!fragment.isAdded) tx.add(R.id.container, fragment) else tx.show(fragment)
+        tx.commitAllowingStateLoss()
+    }
+
+    /** 设置页里点「eSIM 管理」时调用：切到 eSIM 页并把底部导航同步过去 */
+    fun openEsim() {
+        switchTab(TAB_ESIM)
+        // eSIM 不在底部导航里，清掉选中态避免误导
+        binding.navView.menu.findItem(R.id.nav_settings)?.isChecked = false
     }
 
     /** 状态栏 / 导航栏图标明暗：由当前实际生效的日夜模式决定（系统已自动切换资源）。 */
@@ -131,5 +160,8 @@ class MainActivity : AppCompatActivity() {
         const val TAB_DEVICES = 1
         const val TAB_ESIM = 2
         const val TAB_SETTINGS = 3
+
+        /** Activity 重建后恢复当前页用 */
+        const val KEY_CURRENT_TAB = "smsatbox_current_tab"
     }
 }
