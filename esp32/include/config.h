@@ -32,6 +32,10 @@
 #define RETRY_SLOW_MS (60 * 1000)
 // 串口行缓冲长度
 #define MODEM_LINE_BUFFER 320
+// 扩展模块（eUICC）专用的大缓冲：
+//   AT+CGLA 返回的 APDU 数据可达数 KB（profile 列表 516 字节 -> 1032 个 hex 字符），
+//   用普通行缓冲会被截断，导致引号不闭合、解析失败。
+#define MODEM_RAW_LINE_BUFFER 4096
 // 单条短信最大长度
 #define SMS_MAX_LEN 320
 // 本地 Web 日志环形缓冲行数
