@@ -22,16 +22,118 @@ String trimCrlf(const String& s) {
   return out;
 }
 
-// 从 "+CMGR: \"REC UNREAD\",\"+8613800138000\",,\"24/01/01,10:00:00+32\"" 里取号码
+// 从 "+CMGR: \"REC UNREAD\",\"+8613800138000\",,\"24/01/01,10:00:00+32\"" 里取第 index 对引号内容
+// index=0 -> REC UNREAD，index=1 -> +8613800138000，index=2 -> 时间戳
 String extractQuoted(const String& line, int index) {
-  int q = -1;
-  for (int i = 0, seen = 0; i <= index; i++) {
-    q = line.indexOf('"', q + 1);
-    if (q < 0) return String();
+  int pos = -1;
+  for (int i = 0; i <= index; i++) {
+    int begin = line.indexOf('"', pos + 1);
+    if (begin < 0) return String();
+    int end = line.indexOf('"', begin + 1);
+    if (end < 0) return String();
+    if (i == index) return line.substring(begin + 1, end);
+    pos = end;  // 跳到这一对的结束引号，下次从这里继续找
   }
-  int end = line.indexOf('"', q + 1);
-  if (end < 0) return String();
-  return line.substring(q + 1, end);
+  return String();
+}
+
+// ---- UCS2 解码：中文短信通常以 4 位十六进制/字符 传输 ----
+// 例如 "8FD4" -> "返"，"4F60597D" -> "你好"
+static bool looksLikeUcs2(const String& s) {
+  if (s.length() < 4 || (s.length() % 4) != 0) return false;
+  for (size_t i = 0; i < s.length(); i++) {
+    char c = s[i];
+    bool hex = (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') ||
+               (c >= 'a' && c <= 'f');
+    if (!hex) return false;
+  }
+  return true;
+}
+
+static String ucs2ToUtf8(const String& hex) {  String out;
+  out.reserve(hex.length() / 2);
+  for (size_t i = 0; i + 3 < hex.length(); i += 4) {
+    uint32_t cp = 0;
+    for (size_t j = i; j < i + 4; j++) {
+      char c = hex[j];
+      uint32_t v = (c >= '0' && c <= '9') ? (c - '0')
+                 : (c >= 'A' && c <= 'F') ? (c - 'A' + 10)
+                 : (c - 'a' + 10);
+      cp = (cp << 4) | v;
+    }
+    if (cp == 0) continue;
+    // 跳过 BOM / 控制字符
+    if (cp == 0xFEFF) continue;
+    if (cp < 0x20 && cp != '\n' && cp != '\r') continue;
+
+    if (cp < 0x80) {
+      out += (char)cp;
+    } else if (cp < 0x800) {
+      out += (char)(0xC0 | (cp >> 6));
+      out += (char)(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+      out += (char)(0xE0 | (cp >> 12));
+      out += (char)(0x80 | ((cp >> 6) & 0x3F));
+      out += (char)(0x80 | (cp & 0x3F));
+    } else {
+      out += (char)(0xF0 | (cp >> 18));
+      out += (char)(0x80 | ((cp >> 12) & 0x3F));
+      out += (char)(0x80 | ((cp >> 6) & 0x3F));
+      out += (char)(0x80 | (cp & 0x3F));
+    }
+  }
+  return out;
+}
+
+// ---- 反向：UTF-8 -> UCS2 十六进制（发中文短信用）----
+static bool hasNonAscii(const String& s) {
+  for (size_t i = 0; i < s.length(); i++) {
+    if ((uint8_t)s[i] > 0x7F) return true;
+  }
+  return false;
+}
+
+static String utf8ToUcs2(const String& s) {
+  String out;
+  out.reserve(s.length() * 2);
+  size_t i = 0;
+  while (i < s.length()) {
+    uint8_t c = (uint8_t)s[i];
+    uint32_t cp = 0;
+    size_t len = 1;
+    if (c < 0x80) {
+      cp = c;
+    } else if ((c & 0xE0) == 0xC0 && i + 1 < s.length()) {
+      cp = ((c & 0x1F) << 6) | ((uint8_t)s[i + 1] & 0x3F);
+      len = 2;
+    } else if ((c & 0xF0) == 0xE0 && i + 2 < s.length()) {
+      cp = ((c & 0x0F) << 12) | (((uint8_t)s[i + 1] & 0x3F) << 6) |
+           ((uint8_t)s[i + 2] & 0x3F);
+      len = 3;
+    } else if ((c & 0xF8) == 0xF0 && i + 3 < s.length()) {
+      cp = ((c & 0x07) << 18) | (((uint8_t)s[i + 1] & 0x3F) << 12) |
+           (((uint8_t)s[i + 2] & 0x3F) << 6) | ((uint8_t)s[i + 3] & 0x3F);
+      len = 4;
+    } else {
+      cp = '?';
+    }
+    i += len;
+
+    // BMP 内的码点直接转 4 位十六进制；超出 BMP 用代理对
+    if (cp < 0x10000) {
+      char buf[8];
+      snprintf(buf, sizeof(buf), "%04X", (unsigned)cp);
+      out += buf;
+    } else {
+      uint32_t v = cp - 0x10000;
+      uint32_t hi = 0xD800 + (v >> 10);
+      uint32_t lo = 0xDC00 + (v & 0x3FF);
+      char buf[16];
+      snprintf(buf, sizeof(buf), "%04X%04X", (unsigned)hi, (unsigned)lo);
+      out += buf;
+    }
+  }
+  return out;
 }
 }  // namespace
 
@@ -601,6 +703,16 @@ void Modem::readSmsAt(int index) {
     return;
   }
 
+  // 调试用：把原始响应打出来（换行替换成 |，截断 200 字符）
+  {
+    String raw = resp;
+    raw.replace("\r", "");
+    raw.replace("\n", "|");
+    raw.trim();
+    if (raw.length() > 200) raw = raw.substring(0, 200);
+    LOGI("[SLOT%d] CMGR raw: %s", slotIndex_, raw.c_str());
+  }
+
   // resp 结构：
   //   +CMGR: "REC UNREAD","+8613800138000",,"24/01/01,10:00:00+32"
   //   短信正文
@@ -627,6 +739,17 @@ void Modem::readSmsAt(int index) {
     }
   } else {
     LOGE("[SLOT%d] bad +CMGR response", slotIndex_);
+  }
+
+  // ★ 中文短信（UCS2 编码）解码：模组在文本模式下对非 GSM 字符
+  //   会返回 4 位十六进制/字符的 UCS2 串，需要转成 UTF-8 才能正常显示。
+  if (content.length() > 0 && looksLikeUcs2(content)) {
+    String decoded = ucs2ToUtf8(content);
+    if (decoded.length() > 0) {
+      LOGI("[SLOT%d] UCS2 decoded: %s -> %s", slotIndex_, content.c_str(),
+           decoded.c_str());
+      content = decoded;
+    }
   }
 
   // 无论成败都删除，防止 SIM 卡被塞满
@@ -729,13 +852,15 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
     String cmgfResp;
     bool cmgfOk = sendAt("AT+CMGF?", "OK", 2000, &cmgfResp);
     if (!cmgfOk || cmgfResp.indexOf("+CMGF: 1") < 0) {
-      LOGW("[SLOT%d] not in text mode, switching CMGF=1 (raw='%s')", slotIndex_,
-           cmgfResp.c_str());
+      LOGW("[SLOT%d] not in text mode, switching CMGF=1", slotIndex_);
       sendAt("AT+CMGF=1", "OK", 3000);
-      // 文本模式需要 GSM 字符集
-      sendAt("AT+CSCS=\"GSM\"", "OK", 2000);
     }
+    // 字符集：纯 ASCII 用 GSM，含中文用 UCS2
+    bool needUcs2 = hasNonAscii(content);
+    sendAt(needUcs2 ? "AT+CSCS=\"UCS2\"" : "AT+CSCS=\"GSM\"", "OK", 2000);
   }
+
+  const bool sendAsUcs2 = hasNonAscii(content);
 
   // ---- 2) 发送 AT+CMGS="number" ----
   String cmd = "AT+CMGS=\"" + number + "\"";
@@ -787,7 +912,14 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
   }
 
   // ---- 4) 写入正文 + Ctrl-Z 提交 ----
-  serial_->print(content);
+  if (sendAsUcs2) {
+    String hex = utf8ToUcs2(content);
+    LOGI("[SLOT%d] send UCS2 (%u chars): %s", slotIndex_,
+         (unsigned)(hex.length() / 4), hex.c_str());
+    serial_->print(hex);
+  } else {
+    serial_->print(content);
+  }
   serial_->write(0x1A);
   serial_->flush();
 
