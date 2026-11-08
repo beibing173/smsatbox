@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "1.0.2";
+  const VERSION = "1.0.3";
   const API = "/api/v1";
   const LS_TOKEN = "smsatbox.token";
   const LS_USER = "smsatbox.user";
@@ -88,6 +88,10 @@
       this.pref = pref === "dark" || pref === "light" ? pref : "system";
       this.persist();
       this.apply();
+      // 主题切换后保持当前路由高亮不变（避免某些浏览器重排导致视觉错位）
+      if (state.route) {
+        $$(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.route === state.route));
+      }
     },
 
     persist() {
@@ -261,6 +265,11 @@
   }
 
   $("#nav").addEventListener("click", (ev) => {
+    // eSIM 独立工作台（与客户端同款界面）
+    if (ev.target.closest("#nav-esim")) {
+      location.href = "/assets/esim.html?embed=0";
+      return;
+    }
     const btn = ev.target.closest(".nav-item");
     if (btn && btn.dataset.route) switchRoute(btn.dataset.route);
   });
