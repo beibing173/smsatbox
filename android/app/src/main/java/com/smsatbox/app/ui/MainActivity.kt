@@ -1,4 +1,4 @@
-package com.smsatbox.app.ui
+﻿package com.smsatbox.app.ui
 
 import android.annotation.SuppressLint
 import android.content.Intent
@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
 
     private val messagesFragment by lazy { MessagesFragment() }
     private val devicesFragment by lazy { DevicesFragment() }
+    private val esimFragment by lazy { EsimFragment() }
     private val settingsFragment by lazy { SettingsFragment() }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -80,6 +81,7 @@ class MainActivity : AppCompatActivity() {
             when (item.itemId) {
                 R.id.nav_messages -> { switchTab(TAB_MESSAGES); true }
                 R.id.nav_devices -> { switchTab(TAB_DEVICES); true }
+                R.id.nav_esim -> { switchTab(TAB_ESIM); true }
                 R.id.nav_settings -> { switchTab(TAB_SETTINGS); true }
                 else -> false
             }
@@ -90,6 +92,7 @@ class MainActivity : AppCompatActivity() {
     private fun switchTab(tab: Int) {
         val fragment: Fragment = when (tab) {
             TAB_DEVICES -> devicesFragment
+            TAB_ESIM -> esimFragment
             TAB_SETTINGS -> settingsFragment
             else -> messagesFragment
         }
@@ -126,6 +129,7 @@ class MainActivity : AppCompatActivity() {
     companion object {
         const val TAB_MESSAGES = 0
         const val TAB_DEVICES = 1
-        const val TAB_SETTINGS = 2
+        const val TAB_ESIM = 2
+        const val TAB_SETTINGS = 3
     }
 }
