@@ -883,6 +883,15 @@ static String buildSmsPdu(const String& number, const String& ucs2Hex,
 
   String tpdu;
   char buf[8];
+
+  // ★★★ 关键：SMS-SUBMIT 的第一个字节（TPDU 类型）和 message reference ★★★
+  // 标准 3GPP 23.040 SMS-SUBMIT 结构：
+  //   [SCA] [PDU-Type=01] [MR=00] [DA-Len] [DA-Type] [DA-BCD] [PID] [DCS] [VP] [UDL] [UD]
+  // 之前漏掉了 PDU-Type 和 MR，导致模组能接受 PDU（返回 +CMGS）
+  // 但网络侧解析失败，报 CMS ERROR 41 (Temporary failure)。
+  tpdu += "01";  // SMS-SUBMIT 类型（bit0=1 提交，bit6=0 无 UDH）
+  tpdu += "00";  // Message Reference（0=模组自动分配）
+
   // 号码位数（十进制数字个数）
   snprintf(buf, sizeof(buf), "%02X", n.length());
   tpdu += buf;
@@ -895,7 +904,10 @@ static String buildSmsPdu(const String& number, const String& ucs2Hex,
 
   tpdu += "00";  // PID：普通点对点短信
   tpdu += "08";  // DCS：UCS2 编码
-  tpdu += "AA";  // VP：相对有效期（约 1 天）
+  // ★ 注意：PDU-Type=0x01 表示 VPF=0（无有效期字段），
+  //   这里不能再写 VP 字节，否则整个 PDU 错位，
+  //   表现为模组接受 PDU（返回 +CMGS）但网络侧报 CMS ERROR 41。
+  //   参考 pdulib 的 PDU_SMS_SUBMIT 实现：DCS 之后直接是 UDL。
 
   // UDL：用户数据字节数
   int byteLen = ucs2Hex.length() / 2;
