@@ -345,9 +345,13 @@ def test_static_web_ui(client):
     index = client.get("/")
     assert index.status_code == 200
     assert "SMSATBOX" in index.text
-    assert f"v{APP_VERSION}" in index.text
+    # 版本号只在「设置 -> 版本更新」一处展示，且由 JS 运行时填充，
+    # 所以这里断言占位元素存在，而不是断言 HTML 里出现具体版本串。
+    assert 'id="set-server-ver"' in index.text
 
-    assert client.get("/assets/app.js").status_code == 200
+    app_js = client.get("/assets/app.js")
+    assert app_js.status_code == 200
+    assert f'const VERSION = "{APP_VERSION}"' in app_js.text
     assert client.get("/assets/styles.css").status_code == 200
     assert client.get("/manifest.webmanifest").status_code == 200
     assert client.get("/sw.js").status_code == 200
