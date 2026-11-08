@@ -45,7 +45,9 @@ static uint32_t s_lastEsimPollMs = 0;
 static uint32_t s_lastEuiccRefreshMs = 0;
 static uint32_t s_bootMs = 0;
 static bool s_lanWebStarted = false;
-static bool s_euiccProbed = false;
+// 每个卡槽独立记录是否已探测过 eUICC。
+// 不能用一个全局标志：某个槽位没插模组时会导致另一个槽位永远等不到上报。
+static bool s_euiccProbed[MODEM_COUNT] = {false, false};
 
 // modem.cpp 中的注册函数
 extern void registerModem(Modem* m);
@@ -61,37 +63,31 @@ static Euicc* euiccForSlot(int slotIndex) {
 
 /**
  * 开机后探测两个卡槽是否为 eUICC 卡。
- * 只探测一次（换卡需重启，符合实际使用习惯），避免频繁占用串口。
+ * 每个卡槽独立判断：某个槽位没插模组不影响另一个槽位的探测与上报。
  */
 static void probeEuiccOnce() {
-  if (s_euiccProbed) return;
-
-  s_euicc1.bindSlot(1);
-  s_euicc2.bindSlot(2);
-
-  bool allProbed = true;
   for (int i = 1; i <= MODEM_COUNT; i++) {
+    const int idx = i - 1;
+    if (s_euiccProbed[idx]) continue;
+
     Modem* m = modemForSlot(i);
     Euicc* e = euiccForSlot(i);
-    if (m == nullptr || e == nullptr) continue;
-    if (!m->isReady()) {
-      allProbed = false;   // 还有模组没就绪，下次再试
+    if (m == nullptr || e == nullptr) {
+      s_euiccProbed[idx] = true;  // 该槽位不存在，标记完成
       continue;
     }
-    e->probe(false);
-  }
+    if (!m->isReady()) continue;  // 模组还没就绪，下次再试
 
-  if (allProbed) {
-    s_euiccProbed = true;
-    LOGI("eUICC probe done: slot1=%s slot2=%s",
-         s_euicc1.isEuicc() ? "yes" : "no", s_euicc2.isEuicc() ? "yes" : "no");
-    // 探测完成后立即上报一次
-    for (int i = 1; i <= MODEM_COUNT; i++) {
-      Euicc* e = euiccForSlot(i);
-      if (e != nullptr && e->isEuicc()) {
-        e->refresh();
-        cloud::reportEuicc(i, e);
-      }
+    e->bindSlot(i);
+    e->probe(false);
+    s_euiccProbed[idx] = true;
+
+    LOGI("eUICC probe slot%d: %s", i, e->isEuicc() ? "yes" : "no");
+
+    // 确认是 eUICC 才读详情并上报
+    if (e->isEuicc()) {
+      e->refresh();
+      cloud::reportEuicc(i, e);
     }
   }
 }
