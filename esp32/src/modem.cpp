@@ -222,6 +222,23 @@ void Modem::hardReset() {
   powerOn();
 }
 
+bool Modem::restartSimStack() {
+  if (!present_) return false;
+
+  LOGI("[SLOT%d] restarting SIM stack (CFUN cycle)", slotIndex_);
+
+  // 关协议栈：让模组放开 SIM
+  atRaw("AT+CFUN=0", "OK", 8000, nullptr);
+  delay(8000);
+
+  // 开协议栈：模组重新初始化 USIM
+  atRaw("AT+CFUN=1", "OK", 15000, nullptr);
+
+  delay(10000);
+  LOGI("[SLOT%d] SIM stack restarted", slotIndex_);
+  return true;
+}
+
 void Modem::restart() {
   hardReset();
   lastActionMs_ = 0;
