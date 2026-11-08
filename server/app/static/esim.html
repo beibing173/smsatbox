@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>eSIM 工作台 · SMSATBOX</title>
+<link rel="icon" href="data:,">
+<style>
+:root{
+  --bg:#f4f7fb; --card:#fff; --line:#e2e8f0; --text:#1e293b; --sub:#64748b;
+  --brand:#2563eb; --brand-soft:#dbeafe; --ok:#059669; --ok-soft:#d1fae5;
+  --warn:#d97706; --warn-soft:#fef3c7; --danger:#dc2626; --danger-soft:#fee2e2;
+  --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+html[data-theme="dark"]{
+  --bg:#0f172a; --card:#1e293b; --line:#334155; --text:#e2e8f0; --sub:#94a3b8;
+  --brand:#3b82f6; --brand-soft:#1e3a8a; --ok:#34d399; --ok-soft:#064e3b;
+  --warn:#fbbf24; --warn-soft:#78350f; --danger:#f87171; --danger-soft:#7f1d1d;
+}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.6 system-ui,-apple-system,"Segoe UI","Noto Sans SC",sans-serif;
+  color:var(--text);background:var(--bg);min-height:100vh}
+header{border-bottom:1px solid var(--line);background:var(--card);
+  padding:16px max(20px,calc((100vw - 1080px)/2));
+  display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h1{font-size:19px;margin:0;letter-spacing:-.3px}
+.sub{color:var(--sub);font-size:12px}
+.badge{padding:4px 11px;background:var(--ok-soft);color:var(--ok);border-radius:20px;font-size:12px;font-weight:600}
+.badge.off{background:var(--danger-soft);color:var(--danger)}
+main{max-width:1080px;padding:22px 20px 40px;margin:0 auto}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:16px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+h2{font-size:16px;margin:0 0 12px}
+h3{font-size:14px;margin:0}
+.label{color:var(--sub);font-size:12px;margin-bottom:3px}
+.mono{font-family:var(--mono);font-size:12.5px;word-break:break-all}
+.muted{color:var(--sub)}
+button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--card);
+  border-radius:9px;padding:7px 14px;color:var(--text);transition:.15s}
+button:hover{border-color:var(--brand);color:var(--brand)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--brand);border-color:var(--brand);color:#fff}
+button.primary:hover{opacity:.9;color:#fff}
+button.danger{color:var(--danger);border-color:var(--danger-soft)}
+button.danger:hover{background:var(--danger-soft)}
+.actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+.slot-tabs{display:flex;gap:8px;margin-bottom:16px}
+.slot-tabs button{flex:1;padding:10px;font-weight:600}
+.slot-tabs button.active{background:var(--brand);border-color:var(--brand);color:#fff}
+.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+@media(max-width:720px){.grid,.grid-3{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.grid .wide{grid-column:1/-1}
+.profile{border:1px solid var(--line);border-radius:11px;padding:14px;margin-bottom:10px}
+.profile.active{border-color:var(--ok);background:linear-gradient(0deg,var(--ok-soft) 0%,transparent 60%)}
+.phead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.pname{font-weight:650;font-size:15px}
+.tag{background:var(--brand-soft);color:var(--brand);padding:2px 9px;border-radius:10px;
+  font-size:11px;font-weight:600;display:inline-block;margin-left:6px}
+.tag.green{background:var(--ok-soft);color:var(--ok)}
+.tag.grey{background:var(--line);color:var(--sub)}
+.meta{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;font-size:13px}
+.empty{text-align:center;padding:32px;color:var(--sub)}
+.switch{display:flex;align-items:center;gap:10px;cursor:pointer;user-select:none}
+.switch input{width:44px;height:24px;appearance:none;background:var(--line);border-radius:12px;
+  position:relative;cursor:pointer;transition:.2s;flex:none}
+.switch input:checked{background:var(--ok)}
+.switch input::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;
+  border-radius:50%;background:#fff;transition:.2s}
+.switch input:checked::after{left:23px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:9px 8px;text-align:left;border-bottom:1px solid var(--line)}
+th{color:var(--sub);font-weight:600;font-size:12px}
+.stat{font-size:24px;font-weight:700;margin-top:2px}
+#notice{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);max-width:90vw;
+  padding:11px 20px;background:var(--text);color:var(--card);border-radius:11px;
+  box-shadow:0 8px 28px #0003;z-index:99;font-weight:500}
+dialog{border:1px solid var(--line);border-radius:14px;padding:20px;
+  width:min(460px,calc(100% - 32px));background:var(--card);color:var(--text);max-height:88vh;overflow:auto}
+dialog::backdrop{background:#0006}
+dialog input{font:inherit;width:100%;border:1px solid var(--line);border-radius:8px;
+  padding:9px 11px;background:var(--bg);color:var(--text)}
+dialog label{display:block;font-size:13px;color:var(--sub);margin:14px 0 5px}
+.foot{font-size:12px;color:var(--sub);text-align:center;margin-top:20px}
+.spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;
+  border-right-color:transparent;border-radius:50%;animation:sp .7s linear infinite;vertical-align:-2px}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>eSIM 工作台</h1>
+    <div class="sub">SMSATBOX · eUICC 可编程卡管理</div>
+  </div>
+  <div class="row" style="gap:10px">
+    <span class="badge" id="connBadge">正在连接</span>
+    <button id="themeBtn" title="切换主题">🌓</button>
+    <button onclick="location.href='/'">返回管理端</button>
+  </div>
+</header>
+
+<main>
+  <!-- ================= 卡槽切换 ================= -->
+  <div class="slot-tabs" id="slotTabs"></div>
+
+  <!-- ================= 概览 ================= -->
+  <section id="overview">
+    <div class="card">
+      <div class="row">
+        <h2 style="margin:0">卡片信息</h2>
+        <div class="actions" style="margin:0">
+          <button id="refreshBtn">刷新卡片</button>
+        </div>
+      </div>
+      <div class="grid" style="margin-top:16px">
+        <div class="wide">
+          <div class="label">EID</div>
+          <div class="mono" id="eid">—</div>
+        </div>
+        <div>
+          <div class="label">已安装配置</div>
+          <div class="stat" id="installed">—</div>
+        </div>
+        <div>
+          <div class="label">剩余存储</div>
+          <div class="stat" id="freeNv">—</div>
+        </div>
+        <div>
+          <div class="label">剩余 RAM</div>
+          <div class="stat" id="freeVol">—</div>
+        </div>
+        <div>
+          <div class="label">卡片状态</div>
+          <div class="stat" id="cardState" style="font-size:16px">—</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row">
+        <div>
+          <h2 style="margin:0">eSIM 管理功能</h2>
+          <div class="sub" style="margin-top:2px">
+            检测到可编程 eUICC 卡时自动开启，也可手动关闭
+          </div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="enableToggle">
+          <span id="toggleLabel">启用</span>
+        </label>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 未检测到 ================= -->
+  <section id="noCard" class="card empty" style="display:none">
+    <div style="font-size:38px;margin-bottom:8px">📵</div>
+    <div style="font-weight:600;margin-bottom:6px">该卡槽未检测到 eUICC 卡</div>
+    <div class="sub">
+      普通 SIM 卡不支持 eSIM 管理。<br>
+      插入「小白卡」/ 9eSIM / 5ber 这类可编程 eUICC 卡后会自动识别。
+    </div>
+  </section>
+
+  <!-- ================= Profile 列表 ================= -->
+  <section id="profilesSection">
+    <div class="card">
+      <div class="row">
+        <h2 style="margin:0">已安装配置</h2>
+        <button id="refreshProfiles">刷新列表</button>
+      </div>
+      <div id="profileList" style="margin-top:14px">
+        <div class="muted">等待读取…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 指令历史 ================= -->
+  <section>
+    <div class="card">
+      <div class="row">
+        <h2 style="margin:0">操作记录</h2>
+        <button id="refreshHistory">刷新</button>
+      </div>
+      <div style="overflow-x:auto;margin-top:12px">
+        <table>
+          <thead>
+            <tr><th>时间</th><th>操作</th><th>ICCID</th><th>状态</th></tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="4" class="muted">暂无记录</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <span id="refreshTime"></span>
+  </div>
+</main>
+
+<!-- ================= 改名弹窗 ================= -->
+<dialog id="renameDialog">
+  <form id="renameForm" method="dialog">
+    <div class="row"><h3>修改名称</h3></div>
+    <div class="mono muted" id="renameIccid" style="margin-top:6px"></div>
+    <label for="nicknameInput">显示名称</label>
+    <input id="nicknameInput" maxlength="64" autocomplete="off" placeholder="例如：主力卡 / 工作号">
+    <div class="actions" style="justify-content:flex-end;margin-top:18px">
+      <button type="button" onclick="document.getElementById('renameDialog').close()">取消</button>
+      <button type="submit" class="primary">保存</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="notice" style="display:none"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- 基础 ----------
+  const $ = (id) => document.getElementById(id);
+  const API = "/api/v1";
+  let TOKEN = localStorage.getItem("smsatbox.token") || "";
+  let USER = null;
+  try { USER = JSON.parse(localStorage.getItem("smsatbox.user") || "null"); } catch (e) { USER = null; }
+
+  let euiccs = [];          // 全部 eUICC
+  let activeSlot = 1;       // 当前查看的卡槽
+  let currentEuicc = null;  // 当前卡槽对应的 eUICC
+  let renameTarget = null;
+
+  // ---------- 主题 ----------
+  function applyTheme() {
+    const saved = localStorage.getItem("smsatbox.theme") || "system";
+    let dark;
+    if (saved === "dark") dark = true;
+    else if (saved === "light") dark = false;
+    else dark = matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+  }
+  applyTheme();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
+  $("themeBtn").onclick = () => {
+    const cur = document.documentElement.dataset.theme;
+    const next = cur === "dark" ? "light" : "dark";
+    localStorage.setItem("smsatbox.theme", next);
+    applyTheme();
+  };
+
+  // ---------- 网络 ----------
+  let noticeTimer = null;
+  function note(msg, err) {
+    const el = $("notice");
+    el.textContent = msg;
+    el.style.display = "block";
+    el.style.background = err ? "var(--danger)" : "var(--text)";
+    el.style.color = "#fff";
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => { el.style.display = "none"; }, 3200);
+  }
+
+  async function api(path, opts) {
+    opts = opts || {};
+    const headers = { "Content-Type": "application/json; charset=utf-8" };
+    if (TOKEN) headers.Authorization = "Bearer " + TOKEN;
+    const resp = await fetch(API + path, {
+      method: opts.method || "GET",
+      headers,
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+    const text = await resp.text();
+    let data = {};
+    try { data = text ? JSON.parse(text) : {}; } catch (e) { data = { raw: text }; }
+    if (!resp.ok) {
+      throw new Error(data.detail || ("HTTP " + resp.status));
+    }
+    return data;
+  }
+
+  // ---------- 渲染 ----------
+  function fmtBytes(v) {
+    if (v === null || v === undefined || v < 0) return "—";
+    if (v > 1024 * 1024) return (v / 1024 / 1024).toFixed(1) + " MB";
+    if (v > 1024) return (v / 1024).toFixed(0) + " KB";
+    return v + " B";
+  }
+
+  function renderSlotTabs() {
+    const box = $("slotTabs");
+    box.replaceChildren();
+    const slots = new Set([1, 2]);
+    euiccs.forEach((e) => slots.add(e.slot_index));
+    [1, 2].forEach((s) => {
+      const btn = document.createElement("button");
+      const found = euiccs.find((e) => e.slot_index === s);
+      btn.textContent = "卡槽 " + s + (found ? " · " + (found.eid ? "eUICC" : "eUICC") : "");
+      if (s === activeSlot) btn.classList.add("active");
+      btn.onclick = () => { activeSlot = s; renderAll(); };
+      box.appendChild(btn);
+    });
+  }
+
+  function renderAll() {
+    renderSlotTabs();
+    currentEuicc = euiccs.find((e) => e.slot_index === activeSlot) || null;
+
+    const hasCard = !!currentEuicc;
+    $("overview").style.display = hasCard ? "" : "none";
+    $("noCard").style.display = hasCard ? "none" : "";
+    $("profilesSection").style.display = hasCard ? "" : "none";
+
+    if (!hasCard) return;
+
+    // 概览
+    $("eid").textContent = currentEuicc.eid || "（卡片未返回）";
+    $("installed").textContent = String(currentEuicc.installed_apps || 0);
+    $("freeNv").textContent = fmtBytes(currentEuicc.free_nonvolatile);
+    $("freeVol").textContent = fmtBytes(currentEuicc.free_volatile);
+    $("cardState").textContent = currentEuicc.online ? "在线" : "设备离线";
+    $("cardState").style.color = currentEuicc.online ? "var(--ok)" : "var(--danger)";
+
+    // 开关
+    $("enableToggle").checked = !!currentEuicc.user_enabled;
+    $("toggleLabel").textContent = currentEuicc.user_enabled ? "已启用" : "已关闭";
+
+    // profile 列表
+    renderProfiles(currentEuicc.profiles || []);
+  }
+
+  function renderProfiles(list) {
+    const box = $("profileList");
+    box.replaceChildren();
+    if (!list.length) {
+      const d = document.createElement("div");
+      d.className = "empty";
+      d.textContent = "卡内还没有配置，可通过 LPA 激活码下载";
+      box.appendChild(d);
+      return;
+    }
+
+    list.forEach((p) => {
+      const card = document.createElement("div");
+      card.className = "profile" + (p.state === 1 ? " active" : "");
+
+      const head = document.createElement("div");
+      head.className = "phead";
+
+      const left = document.createElement("div");
+      const name = document.createElement("div");
+      name.className = "pname";
+      name.textContent = p.nickname || p.profile_name || p.provider || "未命名配置";
+      left.appendChild(name);
+
+      const tags = document.createElement("div");
+      tags.style.marginTop = "6px";
+      const st = document.createElement("span");
+      st.className = "tag " + (p.state === 1 ? "green" : "grey");
+      st.textContent = p.state === 1 ? "使用中" : "未启用";
+      tags.appendChild(st);
+      if (p.provider) {
+        const t = document.createElement("span");
+        t.className = "tag";
+        t.textContent = p.provider;
+        tags.appendChild(t);
+      }
+      left.appendChild(tags);
+
+      const right = document.createElement("div");
+      right.className = "actions";
+      right.style.marginTop = "0";
+
+      const editBtn = document.createElement("button");
+      editBtn.textContent = "改名";
+      editBtn.onclick = () => openRename(p);
+      right.appendChild(editBtn);
+
+      if (p.state === 1) {
+        const off = document.createElement("button");
+        off.textContent = "停用";
+        off.onclick = () => sendCommand("disable", p);
+        right.appendChild(off);
+      } else {
+        const on = document.createElement("button");
+        on.className = "primary";
+        on.textContent = "启用";
+        on.onclick = () => sendCommand("enable", p);
+        right.appendChild(on);
+
+        const del = document.createElement("button");
+        del.className = "danger";
+        del.textContent = "删除";
+        del.onclick = () => {
+          if (confirm("删除后无法恢复，确定删除该配置？\n\n" + p.iccid)) {
+            sendCommand("delete", p);
+          }
+        };
+        right.appendChild(del);
+      }
+
+      head.append(left, right);
+      card.appendChild(head);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const iccidBox = document.createElement("div");
+      iccidBox.innerHTML = '<div class="label">ICCID</div><div class="mono">' + (p.iccid || "—") + "</div>";
+      const pnBox = document.createElement("div");
+      pnBox.innerHTML = '<div class="label">Profile 名称</div><div>' + (p.profile_name || "—") + "</div>";
+      meta.append(iccidBox, pnBox);
+      card.appendChild(meta);
+
+      box.appendChild(card);
+    });
+  }
+
+  function renderHistory(items) {
+    const body = $("historyBody");
+    body.replaceChildren();
+    if (!items.length) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 4;
+      td.className = "muted";
+      td.textContent = "暂无记录";
+      tr.appendChild(td);
+      body.appendChild(tr);
+      return;
+    }
+    const opName = { refresh: "刷新", enable: "启用", disable: "停用", delete: "删除", nickname: "改名" };
+    const stName = { pending: "排队中", done: "已完成", failed: "失败" };
+    items.forEach((c) => {
+      const tr = document.createElement("tr");
+      const t = (c.created_at || "").replace("T", " ").slice(0, 19);
+      tr.innerHTML =
+        "<td>" + t + "</td>" +
+        "<td>" + (opName[c.operation] || c.operation) + "</td>" +
+        '<td class="mono">' + (c.iccid || "—") + "</td>" +
+        "<td>" + (stName[c.status] || c.status) +
+        (c.error ? '<div class="muted" style="font-size:11px">' + c.error + "</div>" : "") +
+        "</td>";
+      body.appendChild(tr);
+    });
+  }
+
+  // ---------- 动作 ----------
+  async function loadAll() {
+    try {
+      const r = await api("/esim");
+      euiccs = r.items || [];
+      $("connBadge").textContent = "已连接";
+      $("connBadge").className = "badge";
+      renderAll();
+    } catch (e) {
+      $("connBadge").textContent = "连接失败";
+      $("connBadge").className = "badge off";
+      note(e.message, true);
+    }
+    await loadHistory();
+    $("refreshTime").textContent = "刷新于 " + new Date().toLocaleTimeString("zh-CN");
+  }
+
+  async function loadHistory() {
+    try {
+      const r = await api("/esim/commands?limit=15");
+      renderHistory(r.items || []);
+    } catch (e) { /* 忽略 */ }
+  }
+
+  async function sendCommand(operation, profile, nickname) {
+    if (!currentEuicc) return;
+    try {
+      await api("/esim/command", {
+        method: "POST",
+        body: {
+          device_id: currentEuicc.device_id,
+          slot_index: currentEuicc.slot_index,
+          operation,
+          iccid: profile ? profile.iccid : "",
+          nickname: nickname || "",
+        },
+      });
+      note("指令已下发，等待设备执行…");
+      await loadHistory();
+    } catch (e) {
+      note(e.message, true);
+    }
+  }
+
+  function openRename(p) {
+    renameTarget = p;
+    $("renameIccid").textContent = p.iccid;
+    $("nicknameInput").value = p.nickname || "";
+    $("renameDialog").showModal();
+    setTimeout(() => $("nicknameInput").focus(), 50);
+  }
+
+  $("renameForm").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const name = $("nicknameInput").value.trim();
+    $("renameDialog").close();
+    if (renameTarget) {
+      await sendCommand("nickname", renameTarget, name);
+    }
+  });
+
+  $("enableToggle").addEventListener("change", async (ev) => {
+    if (!currentEuicc) return;
+    try {
+      await api("/esim/" + currentEuicc.id + "/toggle", {
+        method: "PATCH",
+        body: { user_enabled: ev.target.checked },
+      });
+      currentEuicc.user_enabled = ev.target.checked;
+      $("toggleLabel").textContent = ev.target.checked ? "已启用" : "已关闭";
+      note(ev.target.checked ? "已启用 eSIM 管理" : "已关闭 eSIM 管理");
+    } catch (e) {
+      note(e.message, true);
+      ev.target.checked = !ev.target.checked;
+    }
+  });
+
+  $("refreshBtn").onclick = async () => {
+    if (!currentEuicc) return;
+    await sendCommand("refresh");
+  };
+  $("refreshProfiles").onclick = loadAll;
+  $("refreshHistory").onclick = loadHistory;
+
+  // ---------- 轮询 ----------
+  loadAll();
+  setInterval(loadAll, 8000);
+})();
+</script>
+</body>
+</html>
