@@ -721,6 +721,22 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
   // ---- 1) 清空串口缓冲 ----
   while (serial_->available()) serial_->read();
 
+  // ---- 1.5) 确保处于文本模式（CMGF=1）----
+  // ★ CMS ERROR 304 = "Invalid PDU mode parameter"
+  //   说明模组当前在 PDU 模式（CMGF=0），但我们是按文本模式发的。
+  //   模组掉线重启后可能恢复默认 PDU 模式，所以每次发送前都确认一次。
+  {
+    String cmgfResp;
+    bool cmgfOk = sendAt("AT+CMGF?", "OK", 2000, &cmgfResp);
+    if (!cmgfOk || cmgfResp.indexOf("+CMGF: 1") < 0) {
+      LOGW("[SLOT%d] not in text mode, switching CMGF=1 (raw='%s')", slotIndex_,
+           cmgfResp.c_str());
+      sendAt("AT+CMGF=1", "OK", 3000);
+      // 文本模式需要 GSM 字符集
+      sendAt("AT+CSCS=\"GSM\"", "OK", 2000);
+    }
+  }
+
   // ---- 2) 发送 AT+CMGS="number" ----
   String cmd = "AT+CMGS=\"" + number + "\"";
   serial_->println(cmd);
