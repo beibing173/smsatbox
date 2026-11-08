@@ -37,11 +37,29 @@ class EsimFragment : androidx.fragment.app.Fragment() {
         return binding.root
     }
 
+    /**
+     * 从 API base 推导站点根地址。
+     *
+     * ApiClient 内部 base 形如 http://host:8000/api/v1，
+     * 但静态页面 esim.html 挂在站点根下（/assets/esim.html）。
+     * 直接拼会变成 /api/v1/assets/esim.html → 404。
+     */
+    private fun siteRoot(serverUrl: String): String {
+        var s = serverUrl.trim().trimEnd('/')
+        for (suffix in listOf("/api/v1", "/api")) {
+            if (s.endsWith(suffix, ignoreCase = true)) {
+                s = s.dropLast(suffix.length).trimEnd('/')
+                break
+            }
+        }
+        return s
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        val server = Prefs.serverUrl.trimEnd('/')
+        val server = siteRoot(Prefs.serverUrl)
         if (server.isEmpty()) {
             binding.hintText.text = "请先在设置里填写服务器地址"
             binding.hintText.visibility = View.VISIBLE
