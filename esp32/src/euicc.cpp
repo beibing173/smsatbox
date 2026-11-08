@@ -640,7 +640,7 @@ bool Euicc::enableProfile(const String& iccid) {
     // BF31 { A0 { 5A iccid } 81 01 FF }
     // 0x81 的 FF 表示「立即生效」，必须显式构造单字节，避免 "\xFF" 字面量歧义
     String ffByte;
-    ffByte += (char)0xFF;
+    ffByte += (char)0x00;
 
     String body = wrapTlv("A0", wrapTlv("5A", iccidBytes)) + wrapTlv("81", ffByte);
     String reqHex = wrapTlv("BF31", body);
@@ -681,11 +681,12 @@ bool Euicc::enableProfile(const String& iccid) {
   if (channel > 0) closeChannel(channel);
   m->unlockExtension();
 
-  if (ok) {
-    LOGI("[SLOT%d] eUICC profile enabled: %s", slot_, iccid.c_str());
-    // 切换 profile 会触发 REFRESH，模组需要重启才能用新卡
-    m->restart();
-  }
+  // 无论 ES10 的响应如何都要重启 SIM 协议栈：
+  //   refreshFlag=FALSE 时卡会切成功但可能不回完整响应，
+  //   模组也必须 CFUN 重启才会重新读卡（实测：不重启则 +CME ERROR: 10）。
+  LOGI("[SLOT%d] eUICC enable done ok=%d iccid=%s, restarting SIM stack",
+       slot_, (int)ok, iccid.c_str());
+  m->restartSimStack();
   return ok;
 }
 
@@ -747,10 +748,9 @@ bool Euicc::disableProfile(const String& iccid) {
   if (channel > 0) closeChannel(channel);
   m->unlockExtension();
 
-  if (ok) {
-    LOGI("[SLOT%d] eUICC profile disabled: %s", slot_, iccid.c_str());
-    m->restart();
-  }
+  LOGI("[SLOT%d] eUICC disable done ok=%d iccid=%s, restarting SIM stack",
+       slot_, (int)ok, iccid.c_str());
+  m->restartSimStack();
   return ok;
 }
 
