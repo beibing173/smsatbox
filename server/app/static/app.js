@@ -261,8 +261,14 @@
   }
 
   $("#nav").addEventListener("click", (ev) => {
+    // eSIM 工作台是独立页面（沿用参考项目的完整 eUICC 界面）
+    const esimBtn = ev.target.closest("#nav-esim");
+    if (esimBtn) {
+      location.href = "/assets/esim.html";
+      return;
+    }
     const btn = ev.target.closest(".nav-item");
-    if (btn) switchRoute(btn.dataset.route);
+    if (btn && btn.dataset.route) switchRoute(btn.dataset.route);
   });
 
   /* ------------------------------------------------------------ 通用滑块槽 */
