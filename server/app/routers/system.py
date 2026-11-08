@@ -1,4 +1,4 @@
-﻿"""系统信息、健康检查、全局配置。"""
+"""系统信息、健康检查、全局配置。"""
 
 from __future__ import annotations
 
