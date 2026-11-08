@@ -20,6 +20,58 @@
             android:textColor="@color/text_0"
             android:layout_marginBottom="14dp" />
 
+        <!-- eSIM 管理入口（从底部导航移入设置页） -->
+        <LinearLayout
+            android:id="@+id/esimEntryBtn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:background="@drawable/bg_card"
+            android:padding="16dp"
+            android:layout_marginBottom="12dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:backgroundTint="@color/surface">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="💳"
+                android:textSize="22sp"
+                android:layout_marginEnd="12dp" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="eSIM 管理"
+                    android:textSize="15sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/text_0" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="可编程 eUICC 卡的切卡、写卡与删除"
+                    android:textSize="11.5sp"
+                    android:textColor="@color/text_2"
+                    android:layout_marginTop="2dp" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="›"
+                android:textSize="20sp"
+                android:textColor="@color/text_2" />
+        </LinearLayout>
+
         <!-- 连接信息 -->
         <LinearLayout
             android:layout_width="match_parent"
