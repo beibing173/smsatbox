@@ -65,6 +65,12 @@ static void onCall(int slotIndex, const String& number) {
 // ---------------------------------------------------------------------------
 // 执行一条下行指令
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// 发短信冷却：供电不足时频繁发射会让模组反复死机，这里做退避保护
+// ---------------------------------------------------------------------------
+static uint32_t s_smsCooldownUntil = 0;   // 冷却结束时间
+static int s_smsFailStreak = 0;           // 连续失败次数
+
 static void executeCommand(const CloudCommand& cmd) {
   switch (cmd.type) {
     case CMD_SEND_SMS: {
@@ -83,11 +89,38 @@ static void executeCommand(const CloudCommand& cmd) {
         return;
       }
 
+      // ★ 冷却保护：连续发送失败说明供电撑不住，退避 2 分钟再试，
+      //   避免每条指令都把模组打死一次。
+      uint32_t now = millis();
+      if (s_smsCooldownUntil != 0 && (int32_t)(now - s_smsCooldownUntil) < 0) {
+        LOGW("cmd #%d deferred: sms cooldown %lds left", cmd.commandId,
+             (long)((s_smsCooldownUntil - now) / 1000));
+        return;
+      }
+
       LOGI("exec cmd #%d: slot%d send sms -> %s", cmd.commandId, cmd.slotIndex,
            cmd.targetNumber.c_str());
+
+      // 发射前给电源 300ms 稳定时间
+      delay(300);
+
       String err;
       bool ok = m->sendSms(cmd.targetNumber, cmd.content, &err);
       cloud::reportCommandResult(cmd.commandId, ok ? "sent" : "failed", err);
+
+      if (ok) {
+        s_smsFailStreak = 0;
+      } else {
+        s_smsFailStreak++;
+        // 连续失败 2 次以上进入冷却，且失败越多冷却越久（最多 10 分钟）
+        if (s_smsFailStreak >= 2) {
+          uint32_t cooldownMs = 120000UL * (s_smsFailStreak - 1);
+          if (cooldownMs > 600000UL) cooldownMs = 600000UL;
+          s_smsCooldownUntil = millis() + cooldownMs;
+          LOGW("sms failed %d times in a row, cooldown %lus (check power supply!)",
+               s_smsFailStreak, cooldownMs / 1000);
+        }
+      }
       break;
     }
 
