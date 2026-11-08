@@ -14,8 +14,8 @@ val versionProps = Properties().apply {
     val f = rootProject.file("version.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
-val appVersionName: String = versionProps.getProperty("VERSION_NAME", "1.0.0")
-val appVersionCode: Int = versionProps.getProperty("VERSION_CODE", "10000").toInt()
+val appVersionName: String = versionProps.getProperty("VERSION_NAME", "1.0.2")
+val appVersionCode: Int = versionProps.getProperty("VERSION_CODE", "10002").toInt()
 
 android {
     namespace = "com.smsatbox.app"
