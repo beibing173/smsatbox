@@ -45,9 +45,6 @@ class MainActivity : AppCompatActivity() {
         setupNav()
         applySystemBarStyle()
 
-        // 底部版本号（要求：三端布局一致，底部标注版本号）
-        binding.versionText.text = "v${BuildConfig.APP_VERSION}"
-
         // 注意：切换深浅主题会让 AppCompat 重建 Activity。
         // 必须把当前 Tab 存进 savedInstanceState，否则重建后
         // 内容区回到默认页、而底部导航还停在上一次的选中项。
@@ -124,11 +121,18 @@ class MainActivity : AppCompatActivity() {
             .commitAllowingStateLoss()
     }
 
-    /** 设置页里点「eSIM 管理」时调用：切到 eSIM 页并把底部导航同步过去 */
+    /** 设置页里点「eSIM 管理」时调用 */
     fun openEsim() {
-        switchTab(TAB_ESIM)
-        // eSIM 不在底部导航里，清掉选中态避免误导
-        binding.navView.menu.findItem(R.id.nav_settings)?.isChecked = false
+        try {
+            switchTab(TAB_ESIM)
+            // eSIM 不在底部导航里，清掉选中态避免误导
+            binding.navView.menu.findItem(R.id.nav_settings)?.isChecked = false
+        } catch (e: Exception) {
+            android.widget.Toast.makeText(
+                this, "打开 eSIM 页面失败：" + e.message,
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     /** 状态栏 / 导航栏图标明暗：由当前实际生效的日夜模式决定（系统已自动切换资源）。 */
