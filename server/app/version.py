@@ -4,7 +4,7 @@
 CI 会读取本文件中的 VERSION 作为 Docker 镜像 Tag 与发布版本号。
 """
 
-VERSION = "1.0.5"
+VERSION = "1.0.6"
 BUILD_DATE = "2026-11-08"
 PRODUCT = "SMSATBOX"
 API_PREFIX = "/api/v1"
