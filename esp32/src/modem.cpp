@@ -279,7 +279,8 @@ bool Modem::atRaw(const String& cmd, const String& expect, uint32_t timeoutMs,
           return false;
         }
       } else if (c != '\r') {
-        if (acc.length() < MODEM_LINE_BUFFER) acc.concat(c);
+        // 扩展模块用大缓冲：AT+CGLA 的 APDU 响应可能长达数 KB
+        if (acc.length() < MODEM_RAW_LINE_BUFFER) acc.concat(c);
       }
     }
     if (gotExpect && millis() - expectAt > 60) break;
@@ -436,7 +437,8 @@ void Modem::loop() {
         lastRegMs_ = now;
         String resp;
         if (sendAt("AT+CREG?", "OK", 2000, &resp)) {
-          registered_ = (resp.indexOf(",1") >= 0 || resp.indexOf(",5") >= 0);
+          registered_ = (resp.indexOf(",1") >= 0 || resp.indexOf(",5") >= 0 ||
+                          resp.indexOf(",6") >= 0 || resp.indexOf(",7") >= 0);
           if (!registered_) {
             LOGW("[SLOT%d] not registered, re-attach", slotIndex_);
             sendAt("AT+CFUN=1", "OK", 5000);
@@ -491,7 +493,8 @@ void Modem::handleLine(const String& line) {
   } else if (line.startsWith("+CLIP")) {
     parseClip(line);
   } else if (line.startsWith("+CREG") || line.startsWith("+CGREG")) {
-    registered_ = (line.indexOf(",1") >= 0 || line.indexOf(",5") >= 0);
+    registered_ = (line.indexOf(",1") >= 0 || line.indexOf(",5") >= 0 ||
+                           line.indexOf(",6") >= 0 || line.indexOf(",7") >= 0);
   } else if (line == "RDY" && state_ == MODEM_BOOTING) {
     LOGI("[SLOT%d] modem reported RDY", slotIndex_);
   }
@@ -542,6 +545,10 @@ String Modem::regText() const {
       return "未知";
     case 5:
       return "已注册·漫游";
+    case 6:
+      return "已注册·仅短信";
+    case 7:
+      return "已注册·漫游（仅短信）";
     default:
       return "未知";
   }
@@ -615,36 +622,45 @@ void Modem::queryRegistration() {
   // —— 判定 stat ——
   // 正常两字段：nums[0]=n, nums[1]=stat
   // 只有一字段：那个数可能是 stat，也可能是 n*10+stat 的粘连值
+  //
+  // 合法 stat（3GPP 27.007）：
+  //   0 未注册且未搜索   1 已注册本地网   2 搜索中   3 注册被拒
+  //   4 未知             5 已注册漫游
+  //   6 已注册（仅短信） 7 已注册漫游（仅短信）  ← 国际漫游数据卡常见
+  constexpr int kStatMax = 7;
   int stat = -1;
   if (numCount >= 2) {
     stat = nums[1];
     // 兜底：某些模组（如 ML307A）会把 +CGREG 的状态码粘进来，
     // 变成 "0,11" 这种。此时取个位数即为真实 stat。
-    if (stat > 5) {
+    if (stat > kStatMax) {
       int alt = stat % 10;
-      if (alt >= 0 && alt <= 5) {
+      if (alt >= 0 && alt <= kStatMax) {
         stat = alt;
       }
     }
   } else if (numCount == 1) {
     int v = nums[0];
-    if (v >= 0 && v <= 5) {
+    if (v >= 0 && v <= kStatMax) {
       stat = v;              // 直接就是 stat
-    } else if (v >= 10 && v <= 59) {
+    } else if (v >= 10 && v <= 79) {
       stat = v % 10;         // 粘连：n*10 + stat
     }
   }
 
-  // 极端兜底：若仍无法解析，用 +CGREG 的信息或直接看原始串
-  if (stat < 0 || stat > 5) {
-    // 原始串里含 "1" 或 "5" 且不含 "0,"/2/3 时，倾向于已注册
-    if (body.indexOf(",1") >= 0 || body.indexOf(",5") >= 0) {
-      stat = body.indexOf(",5") >= 0 ? 5 : 1;
+  // 极端兜底：若仍无法解析，看原始串里有没有已注册的状态码
+  if (stat < 0 || stat > kStatMax) {
+    static const char* kRegisteredCodes[] = {",1", ",5", ",6", ",7"};
+    for (const char* code : kRegisteredCodes) {
+      if (body.indexOf(code) >= 0) {
+        stat = code[1] - '0';
+        break;
+      }
     }
   }
 
   // 校验范围，异常时按未注册处理
-  if (stat < 0 || stat > 5) {
+  if (stat < 0 || stat > kStatMax) {
     LOGW("[SLOT%d] cannot parse CREG, raw='%s'", slotIndex_, body.c_str());
     regStatus_ = 0;
     registered_ = false;
@@ -652,7 +668,8 @@ void Modem::queryRegistration() {
   }
 
   regStatus_ = stat;
-  registered_ = (stat == 1 || stat == 5);
+  // 1/5 = 正常注册；6/7 = 已注册但仅支持短信（国际漫游数据卡常见）
+  registered_ = (stat == 1 || stat == 5 || stat == 6 || stat == 7);
 
   // —— 解析 LAC / CellID（可能存在）——
   int q1 = body.indexOf('"');
@@ -750,6 +767,27 @@ void Modem::refreshAll() {
   queryRegistration();
   queryIdentity();
   querySimState();
+
+  // ★ SIM 卡热插拔自恢复：
+  //   模组一旦判定「无卡」会一直返回 +CME ERROR: 10，即使之后插好卡，
+  //   它也不会主动重新读卡。必须重启协议栈（AT+CFUN=1,1）才会重新初始化 SIM。
+  //   这里连续数次检测不到卡就自动重启一次协议栈，让用户插卡后无需重启设备。
+  if (!simReady_ && present_) {
+    simAbsentRounds_++;
+    if (simAbsentRounds_ >= 3) {
+      simAbsentRounds_ = 0;
+      LOGW("[SLOT%d] SIM absent %d rounds, restarting protocol stack (CFUN=1,1)",
+           slotIndex_, 3);
+      // 关射频再开，强制重新初始化 SIM
+      sendAt("AT+CFUN=0", "OK", 5000);
+      delay(1500);
+      sendAt("AT+CFUN=1", "OK", 15000);
+      delay(3000);
+      querySimState();
+    }
+  } else if (simReady_) {
+    simAbsentRounds_ = 0;
+  }
 }
 
 // "+CMTI: \"SM\",4"  -> 读第 4 条
@@ -863,6 +901,96 @@ int Modem::signalDbm() const {
   return -113 + 2 * csq_;
 }
 
+// ---------------------------------------------------------------------------
+// 国际区号推断
+// ---------------------------------------------------------------------------
+//  为什么优先用本机号码而不是 IMSI？
+//    IMSI 的 MCC 只表示「卡归属的运营商国家」，和号码归属可能不一致。
+//    例如国际漫游 eSIM：IMSI 是香港(454)，但号码是 +1 美国号。
+//    本机号码自己写的前缀才是这个号真正该用的国际码。
+// ---------------------------------------------------------------------------
+String Modem::countryCode() const {
+  // ---- 1) 本机号码前缀（最准）----
+  if (phoneNumber_.startsWith("+") && phoneNumber_.length() >= 4) {
+    String d = phoneNumber_.substring(1);
+
+    // 1 位区号：+1 北美、+7 俄罗斯
+    if (d[0] == '1' || d[0] == '7') return String("+") + d[0];
+
+    // 3 位区号：香港 852 / 澳门 853 / 台湾 886 / 柬埔寨 855 / 老挝 856
+    if (d.length() >= 3) {
+      String t = d.substring(0, 3);
+      if (t == "852" || t == "853" || t == "886" || t == "855" || t == "856") {
+        return "+" + t;
+      }
+    }
+
+    // 其余按 2 位区号（86/81/82/91/44/49/33/39/61/65/60... 都是 2 位）
+    if (d.length() >= 2) return "+" + d.substring(0, 2);
+  }
+
+  // ---- 2) IMSI 的 MCC 兜底（卡没写号码时）----
+  if (imsi_.length() >= 3) {
+    String mcc = imsi_.substring(0, 3);
+    if (mcc == "460" || mcc == "461") return "+86";   // 中国
+    if (mcc == "454" || mcc == "455") return "+852";  // 香港
+    if (mcc == "466") return "+886";                  // 台湾
+    if (mcc == "440" || mcc == "441") return "+81";   // 日本
+    if (mcc == "450") return "+82";                   // 韩国
+    if (mcc.startsWith("31") || mcc == "302") return "+1";  // 北美
+    if (mcc == "234" || mcc == "235") return "+44";   // 英国
+    if (mcc == "262") return "+49";                   // 德国
+    if (mcc == "208") return "+33";                   // 法国
+    if (mcc == "222") return "+39";                   // 意大利
+    if (mcc == "505") return "+61";                   // 澳大利亚
+    if (mcc == "525") return "+65";                   // 新加坡
+    if (mcc == "502") return "+60";                   // 马来西亚
+    if (mcc == "520") return "+66";                   // 泰国
+    if (mcc == "404" || mcc == "405") return "+91";   // 印度
+    if (mcc == "724") return "+55";                   // 巴西
+  }
+
+  return String();
+}
+
+namespace {
+
+// 判断号码是否已经是「本国号码」形态（不需要再补国际区号）
+bool looksDomestic(const String& n, const String& cc) {
+  if (cc == "+86") return n.length() == 11 && n[0] == '1';
+  if (cc == "+1") return n.length() == 10;
+  if (cc == "+852" || cc == "+853") return n.length() == 8;
+  if (cc == "+886") return n.length() == 9 || n.length() == 10;
+  if (cc == "+81") return n.length() == 10 || n.length() == 11;
+  if (cc == "+82") return n.length() == 9 || n.length() == 10;
+  if (cc == "+65") return n.length() == 8;
+  if (cc == "+60") return n.length() == 9 || n.length() == 10;
+  if (cc == "+44") return n.length() == 10 || n.length() == 11;
+  return false;
+}
+
+}  // namespace
+
+String Modem::normalizeNumber(const String& number) const {
+  String n = number;
+  n.trim();
+  n.replace(" ", "");
+  n.replace("-", "");
+  if (n.isEmpty()) return n;
+
+  // 已带 "+"：用户显式指定国际格式，原样用（最可靠）
+  if (n.startsWith("+")) return n;
+
+  String cc = countryCode();
+  if (cc.isEmpty()) return n;  // 判断不出国家，保持原样
+
+  // 像本国号码 → 按国内格式发
+  if (looksDomestic(n, cc)) return n;
+
+  // 否则补本机国家区号
+  return cc + n;
+}
+
 void Modem::queryIdentity() {
   // 运营商
   String resp;
@@ -941,9 +1069,13 @@ static String buildSmsPdu(const String& number, const String& ucs2Hex,
   n.replace("-", "");
   if (n.length() == 0) return String();
 
-  // 转国际格式需要加中国区号 86
-  bool intl = forceIntl || number.indexOf('+') >= 0 || n.length() > 11;
-  if (forceIntl && n.length() == 11) {
+  // 记住原始号码是否带 "+"：带了就说明已经是完整国际格式，
+  // 绝对不能再擅自补 86（否则 +1 的美国号会被拼成 86 1606...）
+  const bool hadPlus = number.indexOf('+') >= 0;
+
+  // 转国际格式需要补中国区号 86 —— 仅限「用户没写 +」的国内号码场景
+  bool intl = forceIntl || hadPlus || n.length() > 11;
+  if (forceIntl && !hadPlus && n.length() == 11) {
     n = "86" + n;
   }
 
@@ -985,12 +1117,12 @@ static String buildSmsPdu(const String& number, const String& ucs2Hex,
   return smsc + tpdu;
 }
 
-bool Modem::sendSms(const String& number, const String& content, String* error) {
+bool Modem::sendSms(const String& rawNumber, const String& content, String* error) {
   if (state_ != MODEM_READY) {
     if (error) *error = "modem not ready";
     return false;
   }
-  if (number.length() < 3) {
+  if (rawNumber.length() < 3) {
     if (error) *error = "invalid number";
     return false;
   }
@@ -1001,6 +1133,13 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
   if (serial_ == nullptr) {
     if (error) *error = "serial not ready";
     return false;
+  }
+
+  // 按本机国家区号规范化号码
+  const String number = normalizeNumber(rawNumber);
+  if (number != rawNumber) {
+    LOGI("[SLOT%d] number normalized: %s -> %s (cc=%s)", slotIndex_,
+         rawNumber.c_str(), number.c_str(), countryCode().c_str());
   }
 
   // ---- 1) 清空串口缓冲 ----
@@ -1129,8 +1268,15 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
 //   CMS ERROR 41（Temporary failure）常见于地址类型不被网络接受，
 //   先按 81（国内）发，失败再按 91（国际 +86）重发一次。
 // ---------------------------------------------------------------------------
-bool Modem::sendSmsPdu(const String& number, const String& content, String* error) {
+bool Modem::sendSmsPdu(const String& rawNumber, const String& content, String* error) {
   String ucs2 = utf8ToUcs2(content);
+
+  // 先按本机国家区号规范化号码，再构造 PDU
+  String number = normalizeNumber(rawNumber);
+  if (number != rawNumber) {
+    LOGI("[SLOT%d] number normalized: %s -> %s (cc=%s)", slotIndex_,
+         rawNumber.c_str(), number.c_str(), countryCode().c_str());
+  }
 
   // 诊断：打印设备实际收到的 UTF-8 字节，确认传输无损
   {
