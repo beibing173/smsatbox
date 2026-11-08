@@ -3,7 +3,7 @@
  *   - 静态资源：stale-while-revalidate
  *   - API 请求：network-first，绝不做离线伪造数据
  */
-const VERSION = "1.0.0";
+const VERSION = "1.0.1";
 const CACHE = "smsatbox-web-" + VERSION;
 const ASSETS = [
   "/",
