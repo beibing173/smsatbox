@@ -638,8 +638,17 @@ bool Euicc::enableProfile(const String& iccid) {
     }
 
     // BF31 { A0 { 5A iccid } 81 01 FF }
-    String body = wrapTlv("A0", wrapTlv("5A", iccidBytes)) + wrapTlv("81", "\xFF");
+    // 0x81 的 FF 表示「立即生效」，必须显式构造单字节，避免 "\xFF" 字面量歧义
+    String ffByte;
+    ffByte += (char)0xFF;
+
+    String body = wrapTlv("A0", wrapTlv("5A", iccidBytes)) + wrapTlv("81", ffByte);
     String reqHex = wrapTlv("BF31", body);
+
+    LOGI("[SLOT%d] enable APDU iccid=%s bcd=%s req=%s", slot_, iccid.c_str(),
+         bcd.c_str(),
+         bytesToHex((const uint8_t*)reqHex.c_str(), reqHex.length()).c_str());
+
     String outHex;
     if (!es10Exchange(channel, bytesToHex((const uint8_t*)reqHex.c_str(),
                                           reqHex.length()),
@@ -647,6 +656,7 @@ bool Euicc::enableProfile(const String& iccid) {
       setError("enableProfile APDU failed");
       break;
     }
+    LOGI("[SLOT%d] enable resp=%s", slot_, outHex.c_str());
 
     String raw;
     for (size_t i = 0; i + 1 < outHex.length(); i += 2) {
