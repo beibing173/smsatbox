@@ -14,6 +14,14 @@
 # ==============================================================================
 name: docker-build
 
+# 并发保护：
+#   Docker Hub 对匿名/免费账号有拉取限流（429 Too Many Requests）。
+#   频繁推送会触发多个并发构建，每个都要拉一次基础镜像，很快耗尽额度。
+#   这里同一分支只保留最新一次构建，旧的直接取消，避免白白浪费限流。
+concurrency:
+  group: docker-build-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main, master]
