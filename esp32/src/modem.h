@@ -101,6 +101,9 @@ class Modem {
   /** 根据缺席次数决定重试间隔：刚失败时快，久失败后慢 */
   uint32_t retryInterval() const;
 
+  /** PDU 模式发送（中文短信专用） */
+  bool sendSmsPdu(const String& number, const String& content, String* error);
+
   void handleLine(const String& line);
   void handleUrc(const String& line);
   bool sendAt(const String& cmd, const String& expect, uint32_t timeoutMs,
