@@ -81,4 +81,8 @@
         <item name="android:layout_marginTop">2dp</item>
     </style>
 
+    <!-- 悬空导航：选中项的药丸指示器 -->
+    <style name="NavActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:color">@color/nav_indicator</item>
+    </style>
 </resources>
