@@ -125,6 +125,18 @@ if STATIC_DIR.exists():
     app.mount("/assets", StaticFiles(directory=str(STATIC_DIR)), name="assets")
 
 
+# --------------------------------------------------------------------------- #
+# 兼容旧客户端：静态资源的错误前缀
+# --------------------------------------------------------------------------- #
+# 早期版本的 Android / Windows 客户端把「API base（含 /api/v1）」当成了站点根，
+# 请求静态页时会拼成 /api/v1/assets/esim.html → 404。
+# 这里做一层重定向兜底，让旧版客户端无需升级也能正常打开页面。
+@app.get("/api/v1/assets/{asset_path:path}", include_in_schema=False)
+@app.get("/api/assets/{asset_path:path}", include_in_schema=False)
+def legacy_asset_redirect(asset_path: str):
+    return RedirectResponse(url=f"/assets/{asset_path}", status_code=307)
+
+
 @app.get("/", include_in_schema=False)
 def index():
     index_file = STATIC_DIR / "index.html"
