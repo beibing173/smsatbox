@@ -189,6 +189,23 @@ void Modem::loop() {
       break;
 
     case MODEM_BOOTING: {
+      // ★ 失联后的硬复位：模组死机时软 AT 无效，必须拉 RST 重新上电
+      if (needHardReset_) {
+        needHardReset_ = false;
+        LOGW("[SLOT%d] hard-resetting modem (RST low 300ms) to recover", slotIndex_);
+        if (rstPin_ >= 0) {
+          pinMode(rstPin_, OUTPUT);
+          digitalWrite(rstPin_, LOW);
+          delay(300);
+          digitalWrite(rstPin_, HIGH);
+          delay(100);
+        }
+        powerOn();
+        lastActionMs_ = 0;
+        bootStartMs_ = millis();
+        break;
+      }
+
       // 开机后给模组 3 秒缓冲，再试 AT
       if (now - bootStartMs_ < 3000) break;
       if (now - lastActionMs_ < retryInterval()) break;
@@ -226,6 +243,14 @@ void Modem::loop() {
           LOGW("[SLOT%d] slot appears unused. Will keep probing every %us in background.",
                slotIndex_, RETRY_SLOW_MS / 1000);
         }
+
+        // ★ 每 5 次失败尝试一次硬复位：
+        //   模组可能因供电跌落死机，仅靠 AT 无法唤醒，需要 RST/PWRKEY 重启
+        if (absentRounds_ > 0 && absentRounds_ % 5 == 0) {
+          LOGW("[SLOT%d] retry %d times failed, attempting hard reset",
+               slotIndex_, absentRounds_);
+          needHardReset_ = true;
+        }
         // 不进入 ERROR 状态，保持可恢复：
         // 用户随时插上模组，下一轮探测就能自动接上
       }
@@ -234,15 +259,13 @@ void Modem::loop() {
 
     case MODEM_READY: {
       // 每 30 秒刷一次信号
-      static uint32_t lastSignal = 0;
-      if (now - lastSignal > 30000) {
-        lastSignal = now;
+      if (now - lastSignalMs_ > 30000) {
+        lastSignalMs_ = now;
         querySignal();
       }
       // 每 5 分钟确认一次网络注册
-      static uint32_t lastReg = 0;
-      if (now - lastReg > 300000) {
-        lastReg = now;
+      if (now - lastRegMs_ > 300000) {
+        lastRegMs_ = now;
         String resp;
         if (sendAt("AT+CREG?", "OK", 2000, &resp)) {
           registered_ = (resp.indexOf(",1") >= 0 || resp.indexOf(",5") >= 0);
@@ -252,22 +275,21 @@ void Modem::loop() {
           }
           // 顺便刷新注册详情
           queryRegistration();
-        } else {
-          // AT 有响应但 CREG 查询失败，可能刚掉线，先不动
         }
       }
 
-      // ★ 防呆：定期做活跃性检查，模组被拔掉能自动发现并退回探测态
-      static uint32_t lastAlive = 0;
-      if (now - lastAlive > 45000) {
-        lastAlive = now;
+      // ★ 活跃性检查：模组失联（尤其发射短信后电压跌落死机）自动恢复
+      if (now - lastAliveMs_ > 45000) {
+        lastAliveMs_ = now;
         if (!sendAt("AT", "OK", 800)) {
-          LOGW("[SLOT%d] modem stopped responding, back to probing", slotIndex_);
+          LOGW("[SLOT%d] modem stopped responding (power dip?). will recover",
+               slotIndex_);
           present_ = false;
           state_ = MODEM_BOOTING;
           bootStartMs_ = now;
           lastActionMs_ = 0;
           absentRounds_ = 1;
+          needHardReset_ = true;   // 标记：下次探测前先拉 RST
         }
       }
       break;
