@@ -16,7 +16,7 @@ public static class AppInfo
     public static string VersionLabel => "v" + Version;
 
     /// <summary>请求头 X-Client-Version 用的客户端协议版本。</summary>
-    public const string ClientVersion = "1.0.3";
+    public const string ClientVersion = "1.0.4";
 
     /// <summary>请求头 X-Client-Platform。</summary>
     public const string Platform = "windows";
