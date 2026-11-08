@@ -1,4 +1,4 @@
-﻿"""SMSATBOX Server 入口。
+"""SMSATBOX Server 入口。
 
 启动： uvicorn app.main:app --host 0.0.0.0 --port 8080
 文档： /docs   (OpenAPI)
