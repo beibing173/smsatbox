@@ -823,10 +823,50 @@ void Modem::queryIdentity() {
        phoneNumber_.length() ? phoneNumber_.c_str() : "(not set)");
 }
 
+// 电话号数字串 -> PDU BCD（两位交换，奇数位补 F）
+static String digitsToBcd(const String& digits) {
+  String out;
+  for (size_t i = 0; i < digits.length(); i += 2) {
+    if (i + 1 < digits.length()) {
+      out += digits[i + 1];
+      out += digits[i];
+    } else {
+      out += 'F';
+      out += digits[i];
+    }
+  }
+  return out;
+}
+
+// 构造 SMSC 部分。smscNumber 为空时返回 "00"（依赖 SIM 卡内置短信中心）
+// 格式：信息长度(1字节) + 号码类型(91) + BCD 号码
+static String buildSmscPart(const String& smscNumber) {
+  String s = smscNumber;
+  s.replace("+", "");
+  s.replace(" ", "");
+  s.replace("-", "");
+  if (s.length() < 5) return String("00");
+
+  int bcdBytes = (int)((s.length() + 1) / 2);
+  int infoLen = 1 + bcdBytes;  // 类型字节 + BCD
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%02X", infoLen);
+
+  String out = buf;
+  out += "91";  // 国际号码
+  out += digitsToBcd(s);
+  return out;
+}
+
 // ---- 构造 UCS2 短信的 PDU（CMGF=0 模式），用于可靠地发送中文 ----
-// 参考 3GPP 23.040：SMSC(长度0=用SIM内置) + 地址 + PID + DCS + VP + UDL + UD
-static String buildSmsPdu(const String& number, const String& ucs2Hex) {
-  String pdu = "00";  // SMSC 长度 0：使用 SIM 卡里存的短信中心
+// 参考 3GPP 23.040：SMSC + 地址 + PID + DCS + VP + UDL + UD
+//   smscNumber : 为空则 PDU 里 SMSC 长度写 0（用 SIM 内置）
+//   forceIntl  : 目标号码按 91 国际格式编码（自动补 +86）
+//   tpduLenOut : 输出 TPDU 字节数（不含 SMSC，供 AT+CMGS=<len> 使用）
+static String buildSmsPdu(const String& number, const String& ucs2Hex,
+                          const String& smscNumber, bool forceIntl,
+                          int* tpduLenOut) {
+  String smsc = buildSmscPart(smscNumber);
 
   // 目标号码：去符号
   String n = number;
@@ -835,37 +875,36 @@ static String buildSmsPdu(const String& number, const String& ucs2Hex) {
   n.replace("-", "");
   if (n.length() == 0) return String();
 
+  // 转国际格式需要加中国区号 86
+  bool intl = forceIntl || number.indexOf('+') >= 0 || n.length() > 11;
+  if (forceIntl && n.length() == 11) {
+    n = "86" + n;
+  }
+
+  String tpdu;
   char buf[8];
   // 号码位数（十进制数字个数）
   snprintf(buf, sizeof(buf), "%02X", n.length());
-  pdu += buf;
+  tpdu += buf;
 
   // 号码类型：91=国际号码，81=国内号码
-  bool intl = number.indexOf('+') >= 0 || n.length() > 11;
-  pdu += intl ? "91" : "81";
+  tpdu += intl ? "91" : "81";
 
-  // BCD 编码：两位数字交换，奇数位末尾补 F
-  for (size_t i = 0; i < n.length(); i += 2) {
-    if (i + 1 < n.length()) {
-      pdu += n[i + 1];
-      pdu += n[i];
-    } else {
-      pdu += 'F';
-      pdu += n[i];
-    }
-  }
+  // BCD 编码
+  tpdu += digitsToBcd(n);
 
-  pdu += "00";  // PID：普通点对点短信
-  pdu += "08";  // DCS：UCS2 编码
-  pdu += "AA";  // VP：相对有效期（约 1 天）
+  tpdu += "00";  // PID：普通点对点短信
+  tpdu += "08";  // DCS：UCS2 编码
+  tpdu += "AA";  // VP：相对有效期（约 1 天）
 
   // UDL：用户数据字节数
   int byteLen = ucs2Hex.length() / 2;
   snprintf(buf, sizeof(buf), "%02X", byteLen);
-  pdu += buf;
-  pdu += ucs2Hex;
+  tpdu += buf;
+  tpdu += ucs2Hex;
 
-  return pdu;
+  if (tpduLenOut != nullptr) *tpduLenOut = (int)(tpdu.length() / 2);
+  return smsc + tpdu;
 }
 
 bool Modem::sendSms(const String& number, const String& content, String* error) {
@@ -1006,37 +1045,82 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
   return ok;
 }
 
+
 // ---------------------------------------------------------------------------
-// PDU 模式发送（中文短信专用）
-//   AT+CMGF=0  ->  AT+CMGS=<tpdu_len>  ->  <pdu_hex><Ctrl-Z>  ->  +CMGS: <mr> OK
+// PDU 模式发送（中文短信），带「国内格式 -> 国际格式」自动重试
+//   CMS ERROR 41（Temporary failure）常见于地址类型不被网络接受，
+//   先按 81（国内）发，失败再按 91（国际 +86）重发一次。
 // ---------------------------------------------------------------------------
 bool Modem::sendSmsPdu(const String& number, const String& content, String* error) {
-  // 1) 切到 PDU 模式
-  if (!sendAt("AT+CMGF=0", "OK", 3000)) {
-    if (error) *error = "cannot switch to PDU mode";
-    LOGE("[SLOT%d] CMGF=0 failed", slotIndex_);
-    return false;
+  String ucs2 = utf8ToUcs2(content);
+
+  // 诊断：打印设备实际收到的 UTF-8 字节，确认传输无损
+  {
+    String hexIn;
+    char b[4];
+    for (size_t i = 0; i < content.length() && i < 40; i++) {
+      snprintf(b, sizeof(b), "%02X", (uint8_t)content[i]);
+      hexIn += b;
+    }
+    LOGI("[SLOT%d] content utf8 hex: %s (%u bytes)", slotIndex_, hexIn.c_str(),
+         (unsigned)content.length());
   }
 
-  // 2) 构造 PDU
-  String ucs2 = utf8ToUcs2(content);
-  String pdu = buildSmsPdu(number, ucs2);
-  if (pdu.length() < 20) {
+  // 查短信中心号码，显式写进 PDU（比依赖 SIM 读取更可靠）
+  String smscNumber;
+  if (sendAt("AT+CMGF=0", "OK", 3000)) {
+    String cscaResp;
+    if (sendAt("AT+CSCA?", "OK", 3000, &cscaResp)) {
+      String v = cscaResp;
+      v.replace("\r", "");
+      v.replace("\n", "|");
+      v.trim();
+      LOGI("[SLOT%d] SMSC: %s", slotIndex_, v.c_str());
+
+      // 从 +CSCA: "+8613334113200",145 里取出号码
+      int q1 = v.indexOf('"');
+      if (q1 >= 0) {
+        int q2 = v.indexOf('"', q1 + 1);
+        if (q2 > q1) smscNumber = v.substring(q1 + 1, q2);
+      }
+    }
+  }
+
+  // 第一次：国内号码格式（81）
+  if (sendSmsPduOnce(number, ucs2, smscNumber, false, error)) {
+    sendAt("AT+CMGF=1", "OK", 2000);
+    return true;
+  }
+
+  // 第二次：国际号码格式（91 + 86），很多网络只认这种
+  LOGW("[SLOT%d] retry PDU with +86 international format", slotIndex_);
+  sendAt("AT+CMGF=0", "OK", 3000);
+  bool ok = sendSmsPduOnce(number, ucs2, smscNumber, true, error);
+
+  // 无论成败都恢复文本模式（收短信依赖 CMGF=1）
+  sendAt("AT+CMGF=1", "OK", 2000);
+  return ok;
+}
+
+// 单次 PDU 发送（调用前需先 CMGF=0）
+bool Modem::sendSmsPduOnce(const String& number, const String& ucs2,
+                           const String& smscNumber, bool forceIntl, String* error) {
+  int tpduLen = 0;
+  String pdu = buildSmsPdu(number, ucs2, smscNumber, forceIntl, &tpduLen);
+  if (pdu.length() < 20 || tpduLen <= 0) {
     if (error) *error = "invalid pdu";
     LOGE("[SLOT%d] pdu build failed (len=%u)", slotIndex_, (unsigned)pdu.length());
     return false;
   }
 
-  // TPDU 长度 = PDU 总字节数 - 1（减去 SMSC 长度那个字节）
-  int tpduLen = (int)(pdu.length() / 2) - 1;
-  LOGI("[SLOT%d] send PDU len=%d ucs2=%s", slotIndex_, tpduLen, ucs2.c_str());
+  LOGI("[SLOT%d] PDU(intl=%d) tpdu=%d pdu=%s", slotIndex_, forceIntl ? 1 : 0,
+       tpduLen, pdu.c_str());
 
-  // 3) 清缓冲，发 AT+CMGS=<len>
   while (serial_->available()) serial_->read();
   String cmd = "AT+CMGS=" + String(tpduLen);
   serial_->println(cmd);
 
-  // 4) 等 '>' 提示符
+  // 等 '>' 提示符
   bool gotPrompt = false;
   bool gotError = false;
   String errLine;
@@ -1071,22 +1155,19 @@ bool Modem::sendSmsPdu(const String& number, const String& content, String* erro
   if (gotError) {
     if (error) *error = errLine;
     LOGE("[SLOT%d] CMGS(PDU) rejected: %s", slotIndex_, errLine.c_str());
-    sendAt("AT+CMGF=1", "OK", 2000);  // 恢复文本模式
     return false;
   }
   if (!gotPrompt) {
     if (error) *error = "no prompt (pdu)";
     LOGE("[SLOT%d] CMGS(PDU) no prompt", slotIndex_);
-    sendAt("AT+CMGF=1", "OK", 2000);
     return false;
   }
 
-  // 5) 发 PDU + Ctrl-Z
   serial_->print(pdu);
   serial_->write(0x1A);
   serial_->flush();
 
-  // 6) 等 +CMGS: <mr> 与 OK
+  // 等 +CMGS: <mr> 与 OK
   acc = "";
   start = millis();
   bool ok = false;
@@ -1113,9 +1194,6 @@ bool Modem::sendSmsPdu(const String& number, const String& content, String* erro
     if (ok || finalErr.length() > 0) break;
     delay(5);
   }
-
-  // 无论成败都恢复文本模式（收短信依赖 CMGF=1）
-  sendAt("AT+CMGF=1", "OK", 2000);
 
   if (finalErr.length() > 0) {
     if (error) *error = finalErr;
