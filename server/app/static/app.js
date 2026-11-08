@@ -6,7 +6,7 @@
 (function () {
   "use strict";
 
-  const VERSION = "1.0.4";
+  const VERSION = "1.0.5";
   const API = "/api/v1";
   const LS_TOKEN = "smsatbox.token";
   const LS_USER = "smsatbox.user";
@@ -1271,9 +1271,15 @@
     api("/version")
       .then((v) => {
         $("#set-server-ver").textContent = "v" + v.version;
-        $("#side-version").textContent = "v" + v.version;
-        $("#login-version").textContent = "v" + v.version;
-        $("#mobile-version").textContent = "v" + v.version;
+        // 版本号只保留「设置 → 版本更新」那一处（#set-server-ver），
+        // 其余位置已从 HTML 移除；这里做判空，防止空引用让整段脚本中断。
+        const setVer = (id, text) => {
+          const node = document.getElementById(id);
+          if (node) node.textContent = text;
+        };
+        setVer("side-version", "v" + v.version);
+        setVer("login-version", "v" + v.version);
+        setVer("mobile-version", "v" + v.version);
         document.title = "SMSATBOX · " + (TITLES[state.route] || "") + " · v" + v.version;
       })
       .catch(() => {});
