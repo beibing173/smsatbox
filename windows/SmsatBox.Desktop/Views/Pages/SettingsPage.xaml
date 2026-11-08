@@ -12,6 +12,19 @@
             <TextBlock Text="账号、主题、通知与独立升级" Style="{StaticResource Text.Muted}" Margin="0,4,0,0" />
 
             <!-- ==== 账号与平台 ==== -->
+    <!-- eSIM 管理入口（从左侧导航移入设置页） -->
+    <Border Style="{StaticResource Card}" Margin="0,18,0,0">
+        <StackPanel>
+            <TextBlock Text="eSIM 管理" Style="{StaticResource Text.H2}" />
+            <TextBlock Text="可编程 eUICC 卡的切卡、写卡与删除"
+                       Style="{StaticResource Text.Muted}" Margin="0,4,0,0" />
+            <Button x:Name="EsimEntryBtn" Style="{StaticResource Btn.Base}"
+                    Content="打开 eSIM 工作台" HorizontalAlignment="Left"
+                    Margin="0,14,0,0" Click="OnEsimEntryClick" />
+        </StackPanel>
+    </Border>
+
+
             <Border Style="{StaticResource Card}" Margin="0,18,0,0">
                 <StackPanel>
                     <TextBlock Text="中转平台" Style="{StaticResource Text.H2}" />
