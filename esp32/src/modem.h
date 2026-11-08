@@ -146,6 +146,12 @@ class Modem {
   int absentRounds_ = 0;      // 连续未检测到模组的轮次
   bool everConnected_ = false; // 是否曾经成功握手过
 
+  // ---- v1.3 新增：失联自恢复 + 计时器（不能用 static，否则两个模组会串）----
+  bool needHardReset_ = false; // 下次进入探测前先拉 RST 硬复位
+  uint32_t lastSignalMs_ = 0;
+  uint32_t lastRegMs_ = 0;
+  uint32_t lastAliveMs_ = 0;
+
   static SmsCallback smsCb_;
   static CallCallback callCb_;
 };
