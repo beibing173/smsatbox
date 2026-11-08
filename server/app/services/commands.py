@@ -47,7 +47,7 @@ def build_payload(
         "slot_index": slot_index,
         "target_number": command["target_number"],
         "content": command["content"],
-        "version": "1.0.0",
+        "version": "1.0.1",
     }
 
 
