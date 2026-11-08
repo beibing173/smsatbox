@@ -1,4 +1,4 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly AppState _state = AppState.Current;
     private MessagesPage? _messagesPage;
     private DevicesPage? _devicesPage;
+    private EsimPage? _esimPage;
     private SettingsPage? _settingsPage;
 
     private bool _reallyClosing;
@@ -57,6 +58,10 @@ public partial class MainWindow : Window
                 _devicesPage ??= new DevicesPage();
                 PageHost.Content = _devicesPage;
                 break;
+            case "esim":
+                _esimPage ??= new EsimPage();
+                PageHost.Content = _esimPage;
+                break;
             case "settings":
                 _settingsPage ??= new SettingsPage();
                 PageHost.Content = _settingsPage;
@@ -75,6 +80,9 @@ public partial class MainWindow : Window
         {
             case "devices":
                 NavDevices.IsChecked = true;
+                break;
+            case "esim":
+                NavEsim.IsChecked = true;
                 break;
             case "settings":
                 NavSettings.IsChecked = true;
