@@ -11,6 +11,7 @@
 #include <WiFiClientSecure.h>
 
 #include "config_store.h"
+#include "euicc.h"
 #include "logger.h"
 #include "modem.h"
 #include "network.h"
@@ -312,6 +313,98 @@ bool requestServerUpgrade(const String& targetVersion) {
   String resp;
   int code = httpRequest(apiUrl("/device/server-upgrade"), "POST", body, &resp);
   LOGI("server upgrade req -> %d", code);
+  return code == 200;
+}
+
+// ---------------------------------------------------------------------------
+// eUICC / eSIM
+// ---------------------------------------------------------------------------
+bool reportEuicc(int slotIndex, Euicc* euicc) {
+  if (euicc == nullptr) return false;
+  if (!s_hasToken || !net::online()) return false;
+
+  JsonDocument doc;
+  doc["slot_index"] = slotIndex;
+  doc["present"] = euicc->isEuicc();
+
+  if (euicc->isEuicc()) {
+    const EuiccInfo& info = euicc->cachedInfo();
+    doc["eid"] = info.eid;
+    doc["installed_apps"] = info.installedApps;
+    doc["free_nonvolatile"] = info.freeNonVolatile;
+    doc["free_volatile"] = info.freeVolatile;
+    doc["user_enabled"] = euicc->userEnabled();
+
+    JsonArray arr = doc["profiles"].to<JsonArray>();
+    for (const auto& p : euicc->cachedProfiles()) {
+      JsonObject o = arr.add<JsonObject>();
+      o["iccid"] = p.iccid;
+      o["state"] = p.state;
+      o["nickname"] = p.nickname;
+      o["provider"] = p.provider;
+      o["profile_name"] = p.name;
+    }
+  }
+
+  String body;
+  serializeJson(doc, body);
+
+  String resp;
+  int code = httpRequest(apiUrl("/device/esim/report"), "POST", body, &resp);
+  if (code == 200) {
+    LOGI("euicc report ok slot=%d present=%d profiles=%u", slotIndex,
+         euicc->isEuicc() ? 1 : 0, (unsigned)euicc->cachedProfiles().size());
+    return true;
+  }
+  LOGW("euicc report failed code=%d", code);
+  return false;
+}
+
+bool pollEsimCommand(CloudCommand* out) {
+  if (!s_hasToken || !net::online()) return false;
+
+  String resp;
+  int code = httpRequest(apiUrl("/device/esim/commands"), "GET", "", &resp);
+  if (code != 200) return false;
+
+  JsonDocument doc;
+  if (deserializeJson(doc, resp) != DeserializationError::Ok) return false;
+
+  JsonArray items = doc["items"].as<JsonArray>();
+  if (items.isNull() || items.size() == 0) return false;
+
+  JsonObject it = items[0];
+  out->type = CMD_ESIM;
+  out->commandId = it["id"] | 0;
+  out->slotIndex = it["slot_index"] | 1;
+  out->esimIccid = (const char*)(it["iccid"] | "");
+  out->esimNickname = (const char*)(it["nickname"] | "");
+
+  String op = (const char*)(it["operation"] | "");
+  if (op == "refresh") out->esimOp = ESIM_OP_REFRESH;
+  else if (op == "enable") out->esimOp = ESIM_OP_ENABLE;
+  else if (op == "disable") out->esimOp = ESIM_OP_DISABLE;
+  else if (op == "delete") out->esimOp = ESIM_OP_DELETE;
+  else if (op == "nickname") out->esimOp = ESIM_OP_NICKNAME;
+  else out->esimOp = ESIM_OP_NONE;
+
+  return out->commandId > 0 && out->esimOp != ESIM_OP_NONE;
+}
+
+bool reportEsimResult(int commandId, bool ok, const String& error) {
+  if (!s_hasToken) return false;
+
+  JsonDocument doc;
+  doc["status"] = ok ? "done" : "failed";
+  doc["error"] = error;
+
+  String body;
+  serializeJson(doc, body);
+
+  String resp;
+  String path = "/device/esim/commands/" + String(commandId);
+  int code = httpRequest(apiUrl(path.c_str()), "POST", body, &resp);
+  LOGI("esim cmd %d result %s -> %d", commandId, ok ? "done" : "failed", code);
   return code == 200;
 }
 
