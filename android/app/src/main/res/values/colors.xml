@@ -34,4 +34,7 @@
     <color name="nav_glass">#F0FFFFFF</color>
     <color name="nav_glass_stroke">#40FFFFFF</color>
     <color name="nav_indicator">#1F0891B2</color>
+    <!-- 悬空 Dock 渐变玻璃（顶部受光 / 底部略暗） -->
+    <color name="nav_glass_top">#F5FFFFFF</color>
+    <color name="nav_glass_bottom">#E8F1F5FB</color>
 </resources>
