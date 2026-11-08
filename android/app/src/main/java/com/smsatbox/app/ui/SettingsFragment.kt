@@ -39,6 +39,11 @@ class SettingsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        // eSIM 管理入口（从底部导航移到这里）
+        binding.esimEntryBtn.setOnClickListener {
+            (activity as? MainActivity)?.openEsim()
+        }
+
         binding.serverValue.text = Prefs.serverUrl.ifEmpty { "未配置" }
         binding.tokenValue.text = maskToken(Prefs.token)
         binding.userValue.text = Prefs.userName.ifEmpty { "—" }
