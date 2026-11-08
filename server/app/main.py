@@ -1,4 +1,4 @@
-"""SMSATBOX Server 入口。
+﻿"""SMSATBOX Server 入口。
 
 启动： uvicorn app.main:app --host 0.0.0.0 --port 8080
 文档： /docs   (OpenAPI)
@@ -93,7 +93,17 @@ async def validation_handler(request: Request, exc: RequestValidationError):
 # --------------------------------------------------------------------------- #
 # 路由注册
 # --------------------------------------------------------------------------- #
-from .routers import auth, device_api, devices, messages, ota, system, users, ws  # noqa: E402
+from .routers import (  # noqa: E402
+    auth,
+    device_api,
+    devices,
+    esim,
+    messages,
+    ota,
+    system,
+    users,
+    ws,
+)
 
 api = settings.api_prefix
 app.include_router(system.router, prefix=api)
@@ -102,6 +112,7 @@ app.include_router(users.router, prefix=api)
 app.include_router(devices.router, prefix=api)
 app.include_router(messages.router, prefix=api)
 app.include_router(device_api.router, prefix=api)
+app.include_router(esim.router, prefix=api)
 app.include_router(ota.router, prefix=api)
 app.include_router(ws.router, prefix=api)
 
