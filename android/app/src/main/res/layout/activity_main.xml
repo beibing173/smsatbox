@@ -24,20 +24,6 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent" />
 
-    <!-- 版本号：悬浮在 Dock 上方，极低存在感 -->
-    <TextView
-        android:id="@+id/versionText"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="v1.0.4"
-        android:textSize="9sp"
-        android:textColor="@color/text_2"
-        android:alpha="0.55"
-        android:layout_marginBottom="2dp"
-        app:layout_constraintBottom_toTopOf="@id/navDock"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
-
     <!-- 悬空导航 Dock -->
     <FrameLayout
         android:id="@+id/navDock"
