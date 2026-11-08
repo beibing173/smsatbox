@@ -261,12 +261,6 @@
   }
 
   $("#nav").addEventListener("click", (ev) => {
-    // eSIM 工作台是独立页面（沿用参考项目的完整 eUICC 界面）
-    const esimBtn = ev.target.closest("#nav-esim");
-    if (esimBtn) {
-      location.href = "/assets/esim.html";
-      return;
-    }
     const btn = ev.target.closest(".nav-item");
     if (btn && btn.dataset.route) switchRoute(btn.dataset.route);
   });
@@ -811,6 +805,15 @@
       const r = await api("/devices/" + id);
       const d = r.device;
 
+      // eSIM / eUICC 数据（失败不影响主详情展示）
+      let euiccList = [];
+      try {
+        const er = await api("/esim");
+        euiccList = (er.items || []).filter((e) => e.device_id === d.id);
+      } catch (e) {
+        euiccList = [];
+      }
+
       // 每个卡槽的模组详情区块
       const moduleBlocks = (d.slots || [])
         .map((s) => {
@@ -856,6 +859,75 @@
         })
         .join("");
 
+      // eSIM 区块：直接嵌在设备详情里，不再跳到独立页面
+      const esimBlocks = euiccList
+        .map((e) => {
+          const profiles = (e.profiles || [])
+            .map((p) => {
+              const name = p.nickname || p.profile_name || p.provider || "未命名配置";
+              const active = p.state === 1;
+              const btns = [];
+              btns.push(
+                '<button class="btn btn-sm" data-esim-act="nickname" data-euicc="' +
+                  e.id + '" data-iccid="' + esc(p.iccid) + '" data-name="' + esc(name) + '">改名</button>'
+              );
+              if (active) {
+                btns.push(
+                  '<button class="btn btn-sm" data-esim-act="disable" data-euicc="' +
+                    e.id + '" data-iccid="' + esc(p.iccid) + '">停用</button>'
+                );
+              } else {
+                btns.push(
+                  '<button class="btn btn-sm btn-primary" data-esim-act="enable" data-euicc="' +
+                    e.id + '" data-iccid="' + esc(p.iccid) + '">启用</button>'
+                );
+                btns.push(
+                  '<button class="btn btn-sm btn-danger" data-esim-act="delete" data-euicc="' +
+                    e.id + '" data-iccid="' + esc(p.iccid) + '">删除</button>'
+                );
+              }
+              return (
+                '<div class="esim-profile' + (active ? " active" : "") + '">' +
+                '<div class="esim-main">' +
+                '<div class="esim-name">' + esc(name) +
+                '<span class="tag ' + (active ? "ok" : "") + '">' + (active ? "使用中" : "未启用") + "</span>" +
+                (p.provider ? '<span class="tag">' + esc(p.provider) + "</span>" : "") +
+                "</div>" +
+                '<div class="mono esim-iccid">' + esc(p.iccid) + "</div>" +
+                "</div>" +
+                '<div class="esim-actions">' + btns.join("") + "</div>" +
+                "</div>"
+              );
+            })
+            .join("");
+
+          const freeKb = e.free_nonvolatile > 0 ? Math.round(e.free_nonvolatile / 1024) + " KB" : "—";
+          return (
+            '<div class="module-card esim-card">' +
+            '<div class="module-title">' +
+            '<span class="slot-no">' + e.slot_index + "</span>" +
+            "<span>eUICC 可编程卡</span>" +
+            '<span class="dot ' + (e.online ? "on" : "off") + '"></span>' +
+            (e.user_enabled ? "" : '<span class="tag">功能已关闭</span>') +
+            "</div>" +
+            '<table class="module-table">' +
+            '<tr><td>EID</td><td class="mono">' + esc(e.eid || "（未读取）") + "</td></tr>" +
+            "<tr><td>已装配置</td><td>" + (e.profiles || []).length + " 个</td></tr>" +
+            "<tr><td>剩余存储</td><td>" + freeKb + "</td></tr>" +
+            "</table>" +
+            (profiles
+              ? '<div class="esim-list">' + profiles + "</div>"
+              : '<div class="empty" style="padding:16px">卡内还没有配置，需要用 LPA 激活码下载</div>') +
+            '<div class="esim-foot">' +
+            '<button class="btn btn-sm" data-esim-act="refresh" data-euicc="' + e.id + '">刷新卡片</button>' +
+            '<button class="btn btn-sm" data-esim-act="toggle" data-euicc="' + e.id +
+            '" data-enabled="' + (e.user_enabled ? "1" : "0") + '">' +
+            (e.user_enabled ? "关闭 eSIM 管理" : "启用 eSIM 管理") + "</button>" +
+            "</div></div>"
+          );
+        })
+        .join("");
+
       openModal({
         title: d.device_name || "设备详情",
         sub: "设备 #" + d.id + " · " + (d.online ? "在线" : "离线"),
@@ -873,6 +945,9 @@
           (d.remark ? '<div class="dev-remark" style="margin-top:10px">' + esc(d.remark) + "</div>" : "") +
           '<h4 class="modal-section">4G 模组</h4>' +
           (moduleBlocks || '<div class="empty" style="padding:20px">该设备尚未上报模组状态</div>') +
+          (esimBlocks
+            ? '<h4 class="modal-section">eSIM 配置</h4>' + esimBlocks
+            : "") +
           (state.user.role === "superadmin"
             ? '<div class="field" style="margin-top:14px">' +
               '<button class="btn btn-sm" id="btn-edit-dev" style="margin-right:8px">编辑设备</button>' +
@@ -880,6 +955,71 @@
             : ""),
         okText: "关闭",
         onOk: async () => closeModal(),
+      });
+
+      // eSIM 操作事件（闭包内定义，可直接访问 euiccList）
+      const onEsimAction = async (btn, deviceId) => {
+        const act = btn.dataset.esimAct;
+        const euiccId = Number(btn.dataset.euicc);
+        const euicc = euiccList.find((x) => x.id === euiccId);
+        if (!euicc) return;
+        const iccid = btn.dataset.iccid || "";
+
+        try {
+          if (act === "toggle") {
+            const next = btn.dataset.enabled !== "1";
+            await api("/esim/" + euiccId + "/toggle", {
+              method: "PATCH",
+              body: { user_enabled: next },
+            });
+            toast(next ? "已启用 eSIM 管理" : "已关闭 eSIM 管理", "ok");
+            closeModal();
+            return openDeviceDetail(deviceId);
+          }
+
+          if (act === "nickname") {
+            const cur = btn.dataset.name || "";
+            const name = prompt("给这个配置起个名字（最多 64 字）：", cur);
+            if (name === null) return;
+            await api("/esim/command", {
+              method: "POST",
+              body: {
+                device_id: deviceId,
+                slot_index: euicc.slot_index,
+                operation: "nickname",
+                iccid,
+                nickname: name.trim(),
+              },
+            });
+            toast("改名指令已下发", "ok");
+            closeModal();
+            return;
+          }
+
+          if (act === "delete") {
+            if (!confirm("删除后无法恢复，确定删除这个配置？\n\n" + iccid)) return;
+          }
+
+          // refresh / enable / disable / delete 都走指令队列
+          await api("/esim/command", {
+            method: "POST",
+            body: {
+              device_id: deviceId,
+              slot_index: euicc.slot_index,
+              operation: act,
+              iccid,
+            },
+          });
+          const label = { refresh: "刷新", enable: "启用", disable: "停用", delete: "删除" }[act] || act;
+          toast(label + "指令已下发，等待设备执行…");
+          closeModal();
+        } catch (e) {
+          toast(e.message, "err");
+        }
+      };
+
+      $$("[data-esim-act]").forEach((btn) => {
+        btn.addEventListener("click", () => onEsimAction(btn, id));
       });
 
       const editDev = $("#btn-edit-dev");
@@ -1292,7 +1432,21 @@
     await loadSlots();
     fillSlotSelect("#msg-slot", { withAll: true });
     fillSendSlots();
-    switchRoute(location.hash.slice(1) || "messages");
+
+    // 支持 #devices/<id> 直达某台设备的详情（方便分享链接 / 从通知跳转）
+    const raw = location.hash.slice(1) || "messages";
+    const m = raw.match(/^([a-z]+)\/(\d+)$/);
+    if (m) {
+      switchRoute(m[1]);
+      const did = Number(m[2]);
+      if (m[1] === "devices" && did > 0) {
+        await loadDevices();
+        setTimeout(() => openDeviceDetail(did), 120);
+      }
+    } else {
+      switchRoute(raw);
+    }
+
     connectWs();
     if (Notification && Notification.permission === "default") {
       setTimeout(() => Notification.requestPermission().catch(() => {}), 4000);
