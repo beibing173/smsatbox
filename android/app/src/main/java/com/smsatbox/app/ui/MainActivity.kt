@@ -1,4 +1,4 @@
-﻿package com.smsatbox.app.ui
+package com.smsatbox.app.ui
 
 import android.annotation.SuppressLint
 import android.content.Intent
