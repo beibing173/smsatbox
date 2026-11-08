@@ -1,16 +1,18 @@
-"""服务端端到端测试：鉴权、RBAC、设备上报、反向控制、OTA。"""
+﻿"""服务端端到端测试：鉴权、RBAC、设备上报、反向控制、OTA。"""
 
 from __future__ import annotations
 
 import hashlib
 
+from app.version import VERSION as APP_VERSION
+
 
 def test_health_and_version(client):
     res = client.get("/api/v1/health")
     assert res.status_code == 200
-    assert res.json()["version"] == "1.0.0"
+    assert res.json()["version"] == APP_VERSION
     # 全平台约定：响应头带版本
-    assert res.headers["X-API-Version"] == "1.0.0"
+    assert res.headers["X-API-Version"] == APP_VERSION
 
     ver = client.get("/api/v1/version").json()
     assert ver["product"] == "SMSATBOX"
@@ -25,7 +27,7 @@ def test_login_success_and_failure(client):
     body = ok.json()
     assert body["token_type"] == "bearer"
     assert body["user"]["role"] == "superadmin"
-    assert body["version"] == "1.0.0"
+    assert body["version"] == APP_VERSION
     assert "password_hash" not in body["user"]
 
     bad = client.post(
@@ -335,7 +337,7 @@ def test_server_upgrade_guard(client):
 
 def test_system_overview(client, admin_headers):
     data = client.get("/api/v1/system/overview", headers=admin_headers).json()
-    assert data["version"] == "1.0.0"
+    assert data["version"] == APP_VERSION
     assert data["stats"]["devices_total"] >= 1
 
 
@@ -343,7 +345,7 @@ def test_static_web_ui(client):
     index = client.get("/")
     assert index.status_code == 200
     assert "SMSATBOX" in index.text
-    assert "v1.0.0" in index.text
+    assert f"v{APP_VERSION}" in index.text
 
     assert client.get("/assets/app.js").status_code == 200
     assert client.get("/assets/styles.css").status_code == 200
