@@ -11,12 +11,25 @@
 
 #include "config.h"
 
+class Euicc;  // 前置声明：eUICC 上报用
+
 // 下行指令类型
 enum CloudCommandType {
   CMD_NONE = 0,
   CMD_SEND_SMS,
   CMD_OTA,
   CMD_SERVER_UPGRADE,
+  CMD_ESIM,          // eSIM 操作（切卡/删卡/改名/刷新）
+};
+
+// eSIM 操作类型
+enum EsimOp {
+  ESIM_OP_NONE = 0,
+  ESIM_OP_REFRESH,
+  ESIM_OP_ENABLE,
+  ESIM_OP_DISABLE,
+  ESIM_OP_DELETE,
+  ESIM_OP_NICKNAME,
 };
 
 struct CloudCommand {
@@ -31,6 +44,10 @@ struct CloudCommand {
   String otaUrl;
   String otaMd5;
   int otaSize = 0;
+  // eSIM
+  EsimOp esimOp = ESIM_OP_NONE;
+  String esimIccid;
+  String esimNickname;
 };
 
 namespace cloud {
@@ -63,6 +80,15 @@ bool reportOta(int taskId, const char* status, const String& error = "");
 
 /** 请求 Server 升级（设备发现版本落后时） */
 bool requestServerUpgrade(const String& targetVersion);
+
+/** 上报 eUICC 卡片状态与 profile 列表 */
+bool reportEuicc(int slotIndex, Euicc* euicc);
+
+/** 拉取待执行的 eSIM 指令 */
+bool pollEsimCommand(CloudCommand* out);
+
+/** 回写 eSIM 指令执行结果 */
+bool reportEsimResult(int commandId, bool ok, const String& error = "");
 
 /** 构造带鉴权的完整 URL */
 String apiUrl(const char* path);
