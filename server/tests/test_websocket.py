@@ -1,8 +1,10 @@
-"""WebSocket 实时通道测试：客户端订阅、设备长连接、指令实时下发。"""
+﻿"""WebSocket 实时通道测试：客户端订阅、设备长连接、指令实时下发。"""
 
 from __future__ import annotations
 
 import json
+
+from app.version import VERSION as APP_VERSION
 
 
 def _login(client) -> str:
@@ -22,7 +24,7 @@ def test_client_ws_receives_new_message(client):
     with client.websocket_connect(f"/api/v1/ws?token={token}") as ws:
         hello = json.loads(ws.receive_text())
         assert hello["event"] == "connected"
-        assert hello["data"]["version"] == "1.0.0"
+        assert hello["data"]["version"] == APP_VERSION
 
         # 设备上报短信 -> 客户端应实时收到 new_message
         res = client.post(
