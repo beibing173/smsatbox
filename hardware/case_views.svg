@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1250" viewBox="0 0 1500 1250">
+  <style>
+    .bg { fill: #fbfcfe; }
+    .part { fill: #eef4fb; stroke: #1a4a7a; stroke-width: 2.2; }
+    .hole { fill: #ffffff; stroke: #b3261e; stroke-width: 1.8; stroke-dasharray: 5 3; }
+    .hidden { fill: none; stroke: #8a6d3b; stroke-width: 1.2; stroke-dasharray: 4 3; }
+    .axis { stroke: #c9d6e4; stroke-width: 1; stroke-dasharray: 8 4; }
+    .dim { stroke: #1f6feb; stroke-width: 1; fill: none; marker-end: url(#arr); marker-start: url(#arr); }
+    .dimt { font: 400 11px "Consolas", monospace; fill: #1f6feb; }
+    .title { font: 700 22px "Microsoft YaHei", sans-serif; fill: #12243a; }
+    .sub { font: 400 12px "Microsoft YaHei", sans-serif; fill: #5a7186; }
+    .h2 { font: 700 15px "Microsoft YaHei", sans-serif; fill: #12243a; }
+    .lbl { font: 400 11px "Microsoft YaHei", sans-serif; fill: #24384f; }
+    .note { font: 400 11px "Microsoft YaHei", sans-serif; fill: #8a6d3b; }
+  </style>
+
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+      <path d="M0,4 L8,4" stroke="#1f6feb" stroke-width="1.4"/>
+      <path d="M0,4 L4,1 L4,7 Z" fill="#1f6feb"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1500" height="1250"/>
+
+  <text x="40" y="46" class="title">SMSATBOX 外壳 · 三视图（单位 mm）</text>
+  <text x="40" y="70" class="sub">外尺寸 131 × 101 × 28（下壳）+ 8（上盖）· 壁厚 2.5 · 适配 120×90 PCB</text>
+
+  <!-- ========================= 俯视图 ========================= -->
+  <text x="120" y="112" class="h2">① 俯视图（顶视）</text>
+
+  <!-- 外形 131 × 101，缩放 3.4 倍 -->
+  <g transform="translate(120,140) scale(3.4)">
+    <rect x="0" y="0" width="131" height="101" rx="5" class="part"/>
+    <!-- 内腔 -->
+    <rect x="2.5" y="2.5" width="126" height="96" rx="3" fill="#f8fbff" stroke="#1a4a7a" stroke-width="0.6"/>
+    <!-- 螺丝柱 -->
+    <circle cx="6" cy="6" r="3.5" fill="#dfe9f5" stroke="#1a4a7a" stroke-width="0.6"/>
+    <circle cx="125" cy="6" r="3.5" fill="#dfe9f5" stroke="#1a4a7a" stroke-width="0.6"/>
+    <circle cx="6" cy="95" r="3.5" fill="#dfe9f5" stroke="#1a4a7a" stroke-width="0.6"/>
+    <circle cx="125" cy="95" r="3.5" fill="#dfe9f5" stroke="#1a4a7a" stroke-width="0.6"/>
+    <!-- 天线孔位置（透传） -->
+    <circle cx="36.7" cy="50.5" r="3.5" class="hole"/>
+    <circle cx="94.3" cy="50.5" r="3.5" class="hole"/>
+    <!-- PCB 轮廓（虚线） -->
+    <rect x="5.5" y="5.5" width="120" height="90" class="hidden"/>
+    <!-- USB 开口位置 -->
+    <rect x="59.5" y="0" width="12" height="2.5" fill="#b3261e" opacity="0.5"/>
+    <!-- SIM 开口位置 -->
+    <rect x="128.5" y="22" width="2.5" height="16" fill="#b3261e" opacity="0.5"/>
+    <rect x="128.5" y="58" width="2.5" height="16" fill="#b3261e" opacity="0.5"/>
+  </g>
+
+  <!-- 尺寸标注 -->
+  <g class="dim">
+    <path d="M120 560 H565"/>
+    <path d="M120 553 V567 M565 553 V567"/>
+  </g>
+  <text x="342" y="580" text-anchor="middle" class="dimt">131</text>
+
+  <g class="dim">
+    <path d="M600 140 V483"/>
+    <path d="M593 140 H607 M593 483 H607"/>
+  </g>
+  <text x="620" y="316" class="dimt">101</text>
+
+  <!-- 图例 -->
+  <g class="lbl">
+    <rect x="650" y="150" width="14" height="10" class="part"/>
+    <text x="672" y="160">外壳外形</text>
+    <rect x="650" y="176" width="14" height="10" fill="#f8fbff" stroke="#1a4a7a" stroke-width="0.6"/>
+    <text x="672" y="186">内腔 126×96</text>
+    <circle cx="657" cy="204" r="6" fill="#dfe9f5" stroke="#1a4a7a" stroke-width="0.6"/>
+    <text x="672" y="208">M3 螺丝柱 ×4</text>
+    <circle cx="657" cy="228" r="6" class="hole"/>
+    <text x="672" y="232">天线孔 φ7 ×2</text>
+    <rect x="650" y="244" width="14" height="10" fill="#b3261e" opacity="0.5"/>
+    <text x="672" y="254">USB / SIM 开口</text>
+  </g>
+
+  <!-- ========================= 正视图 ========================= -->
+  <text x="118" y="628" class="h2">② 正视图（前视）</text>
+
+  <g transform="translate(120,662) scale(4.4)">
+    <rect x="0" y="0" width="131" height="28" class="part"/>
+    <!-- 内腔虚线 -->
+    <path d="M2.5 2.5 V25.5 M128.5 2.5 V25.5" class="hidden"/>
+    <!-- 底板 -->
+    <path d="M0 2 V25.5 M131 2 V25.5" class="hidden"/>
+    <!-- USB-C 开口 -->
+    <rect x="59.5" y="6" width="12" height="7" fill="#ffffff" stroke="#b3261e" stroke-width="0.6"/>
+  </g>
+
+  <g class="dim">
+    <path d="M120 810 H696"/>
+    <path d="M120 803 V817 M696 803 V817"/>
+  </g>
+  <text x="408" y="830" text-anchor="middle" class="dimt">131</text>
+  <text x="120" y="856" fill="#b3261e" class="lbl">USB-C 开口 12 × 7（中心 X=65.5，距底 6mm）</text>
+
+  <g class="dim">
+    <path d="M730 662 V785"/>
+    <path d="M723 662 H737 M723 785 H737"/>
+  </g>
+  <text x="750" y="730" class="dimt">28</text>
+
+  <g class="lbl">
+  </g>
+
+  <!-- ========================= 侧视图 ========================= -->
+  <text x="118" y="892" class="h2">③ 侧视图（右视）</text>
+
+  <g transform="translate(120,934) scale(4.4)">
+    <rect x="0" y="0" width="101" height="28" class="part"/>
+    <!-- SIM 开口 2 个 -->
+    <rect x="22" y="8" width="16" height="3.2" fill="#ffffff" stroke="#b3261e" stroke-width="0.6"/>
+    <rect x="58" y="8" width="16" height="3.2" fill="#ffffff" stroke="#b3261e" stroke-width="0.6"/>
+    <!-- 底板 -->
+    <path d="M0 2 V25.5 M101 2 V25.5" class="hidden"/>
+  </g>
+
+  <g class="dim">
+    <path d="M120 1082 H564"/>
+    <path d="M120 1075 V1089 M564 1075 V1089"/>
+  </g>
+  <text x="342" y="1102" text-anchor="middle" class="dimt">101</text>
+
+  <g class="dim">
+    <path d="M600 934 V1057"/>
+    <path d="M593 934 H607 M593 1057 H607"/>
+  </g>
+  <text x="620" y="1002" class="dimt">28</text>
+
+  <g class="lbl">
+
+  </g>
+
+  <!-- ========================= 上盖视图 ========================= -->
+  <g transform="translate(820,140)">
+    <text x="0" y="-18" class="h2">④ 上盖（俯视）</text>
+    <rect x="0" y="0" width="131" height="101" rx="5" class="part"/>
+    <!-- 天线孔 -->
+    <circle cx="36.7" cy="50.5" r="3.5" class="hole"/>
+    <circle cx="94.3" cy="50.5" r="3.5" class="hole"/>
+    <!-- 螺丝孔 -->
+    <circle cx="6" cy="6" r="2.5" fill="#fff" stroke="#1a4a7a" stroke-width="1"/>
+    <circle cx="125" cy="6" r="2.5" fill="#fff" stroke="#1a4a7a" stroke-width="1"/>
+    <circle cx="6" cy="95" r="2.5" fill="#fff" stroke="#1a4a7a" stroke-width="1"/>
+    <circle cx="125" cy="95" r="2.5" fill="#fff" stroke="#1a4a7a" stroke-width="1"/>
+
+    <!-- 顶面散热孔阵列 -->
+    <g fill="#ffffff" stroke="#1a4a7a" stroke-width="0.5">
+      <circle cx="39" cy="35" r="1.2"/><circle cx="56" cy="35" r="1.2"/>
+      <circle cx="73" cy="35" r="1.2"/><circle cx="90" cy="35" r="1.2"/>
+      <circle cx="39" cy="50" r="1.2"/><circle cx="56" cy="50" r="1.2"/>
+      <circle cx="73" cy="50" r="1.2"/><circle cx="90" cy="50" r="1.2"/>
+      <circle cx="39" cy="65" r="1.2"/><circle cx="56" cy="65" r="1.2"/>
+      <circle cx="73" cy="65" r="1.2"/><circle cx="90" cy="65" r="1.2"/>
+    </g>
+  </g>
+
+  <!-- ========================= 打印说明 ========================= -->
+  <rect x="820" y="300" width="600" height="420" rx="8" fill="#fff" stroke="#2b4a6f" stroke-width="2"/>
+  <text x="840" y="330" class="h2">⑤ 3D 打印参数</text>
+
+  <g class="lbl">
+    <text x="840" y="364">材料      PLA 或 PETG（PETG 耐温更好）</text>
+    <text x="840" y="390">层高      0.2 mm</text>
+    <text x="840" y="416">壁厚      3 圈 = 1.2 mm</text>
+    <text x="840" y="442">填充      20% 网格</text>
+    <text x="840" y="468">顶底层    4 层</text>
+    <text x="840" y="494">打印温度  PLA 200℃ / PETG 235℃</text>
+    <text x="840" y="520">热床      PLA 60℃ / PETG 80℃</text>
+    <text x="840" y="546">支撑      下壳不需要（开口朝上）</text>
+    <text x="840" y="572">          上盖侧裙建议加树形支撑</text>
+    <text x="840" y="598">预计耗材  下壳约 55g，上盖约 25g</text>
+    <text x="840" y="624">预计时间  下壳约 3.5h，上盖约 1.5h</text>
+  </g>
+
+  <text x="840" y="664" class="note">STL 文件：case_base.stl / case_lid.stl</text>
+  <text x="840" y="686" class="note">可调参数：case.scad（OpenSCAD 打开改尺寸）</text>
+
+  <!-- ========================= 装配说明 ========================= -->
+  <rect x="820" y="750" width="600" height="230" rx="8" fill="#fff" stroke="#2b4a6f" stroke-width="2"/>
+  <text x="840" y="780" class="h2">⑥ 装配步骤</text>
+  <g class="lbl">
+    <text x="840" y="812">1. 先把 PCB 放进下壳，对准四角螺丝柱</text>
+    <text x="840" y="838">2. 用 4 颗 M3×6 自攻螺丝从底部拧入（PLA 可直接攻丝）</text>
+    <text x="840" y="864">3. 插好 SIM 卡（从右侧开口推入）</text>
+    <text x="840" y="890">4. 接好天线（IPEX 扣上，天线从顶面天线孔穿出）</text>
+    <text x="840" y="916">5. 盖上上盖，四角对准后压入（侧裙有 0.35mm 过盈）</text>
+    <text x="840" y="942">6. 用 M3×8 螺丝从上盖拧入固定</text>
+  </g>
+
+  <text x="120" y="1116" fill="#b3261e" class="lbl">SIM1 开口 16 × 3.2（中心 Y=30，距底 8mm）</text>
+  <text x="120" y="1134" fill="#b3261e" class="lbl">SIM2 开口 16 × 3.2（中心 Y=66，距底 8mm）</text>
+
+  <text x="40" y="1216" class="sub">SMSATBOX Case Design · v1.0.6 · 2026-11-08 · 配套 STL 见 case_base.stl / case_lid.stl</text>
+</svg>
