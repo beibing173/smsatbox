@@ -195,3 +195,51 @@ class ServerUpgradeRequest(BaseModel):
 
     target_version: str = Field(default="", max_length=32)
     reason: str = Field(default="device-triggered", max_length=200)
+
+
+# --------------------------------------------------------------------------- #
+# eUICC / eSIM（可编程实体卡）
+# --------------------------------------------------------------------------- #
+class EuiccProfileReport(BaseModel):
+    """单个 eSIM profile（设备读卡后上报）。"""
+
+    iccid: str = Field(default="", max_length=32)
+    state: int = Field(default=0, ge=0, le=9)
+    nickname: str = Field(default="", max_length=128)
+    provider: str = Field(default="", max_length=128)
+    # 注意：profile_name 不能叫 name，Pydantic 里 name 是保留字
+    profile_name: str = Field(default="", max_length=128)
+
+
+class EuiccReport(BaseModel):
+    """eUICC 卡片状态上报。设备未检测到 eUICC 时 present=false。"""
+
+    slot_index: int = Field(default=1, ge=1, le=2)
+    present: bool = False
+    eid: str = Field(default="", max_length=64)
+    installed_apps: int = Field(default=0, ge=0)
+    free_nonvolatile: int = Field(default=-1)
+    free_volatile: int = Field(default=-1)
+    user_enabled: bool = True
+    profiles: list[EuiccProfileReport] = Field(default_factory=list)
+
+
+class EsimCommandCreate(BaseModel):
+    """云端下发 eSIM 操作。"""
+
+    device_id: int
+    slot_index: int = Field(default=1, ge=1, le=2)
+    operation: Literal["refresh", "enable", "disable", "delete", "nickname"]
+    iccid: str = Field(default="", max_length=32)
+    nickname: str = Field(default="", max_length=128)
+
+
+class EsimCommandResult(BaseModel):
+    status: Literal["done", "failed"]
+    error: str = Field(default="", max_length=500)
+
+
+class EuiccToggle(BaseModel):
+    """用户手动开关某张 eUICC 的管理功能。"""
+
+    user_enabled: bool
