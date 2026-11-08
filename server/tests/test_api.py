@@ -1,4 +1,4 @@
-﻿"""服务端端到端测试：鉴权、RBAC、设备上报、反向控制、OTA。"""
+"""服务端端到端测试：鉴权、RBAC、设备上报、反向控制、OTA。"""
 
 from __future__ import annotations
 
