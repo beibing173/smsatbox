@@ -823,6 +823,51 @@ void Modem::queryIdentity() {
        phoneNumber_.length() ? phoneNumber_.c_str() : "(not set)");
 }
 
+// ---- 构造 UCS2 短信的 PDU（CMGF=0 模式），用于可靠地发送中文 ----
+// 参考 3GPP 23.040：SMSC(长度0=用SIM内置) + 地址 + PID + DCS + VP + UDL + UD
+static String buildSmsPdu(const String& number, const String& ucs2Hex) {
+  String pdu = "00";  // SMSC 长度 0：使用 SIM 卡里存的短信中心
+
+  // 目标号码：去符号
+  String n = number;
+  n.replace("+", "");
+  n.replace(" ", "");
+  n.replace("-", "");
+  if (n.length() == 0) return String();
+
+  char buf[8];
+  // 号码位数（十进制数字个数）
+  snprintf(buf, sizeof(buf), "%02X", n.length());
+  pdu += buf;
+
+  // 号码类型：91=国际号码，81=国内号码
+  bool intl = number.indexOf('+') >= 0 || n.length() > 11;
+  pdu += intl ? "91" : "81";
+
+  // BCD 编码：两位数字交换，奇数位末尾补 F
+  for (size_t i = 0; i < n.length(); i += 2) {
+    if (i + 1 < n.length()) {
+      pdu += n[i + 1];
+      pdu += n[i];
+    } else {
+      pdu += 'F';
+      pdu += n[i];
+    }
+  }
+
+  pdu += "00";  // PID：普通点对点短信
+  pdu += "08";  // DCS：UCS2 编码
+  pdu += "AA";  // VP：相对有效期（约 1 天）
+
+  // UDL：用户数据字节数
+  int byteLen = ucs2Hex.length() / 2;
+  snprintf(buf, sizeof(buf), "%02X", byteLen);
+  pdu += buf;
+  pdu += ucs2Hex;
+
+  return pdu;
+}
+
 bool Modem::sendSms(const String& number, const String& content, String* error) {
   if (state_ != MODEM_READY) {
     if (error) *error = "modem not ready";
@@ -844,6 +889,13 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
   // ---- 1) 清空串口缓冲 ----
   while (serial_->available()) serial_->read();
 
+  const bool sendAsUcs2 = hasNonAscii(content);
+
+  // ---- 含中文等非 ASCII 字符：走 PDU 模式（ML307A 官方推荐，最可靠）----
+  if (sendAsUcs2) {
+    return sendSmsPdu(number, content, error);
+  }
+
   // ---- 1.5) 确保处于文本模式（CMGF=1）----
   // ★ CMS ERROR 304 = "Invalid PDU mode parameter"
   //   说明模组当前在 PDU 模式（CMGF=0），但我们是按文本模式发的。
@@ -855,12 +907,12 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
       LOGW("[SLOT%d] not in text mode, switching CMGF=1", slotIndex_);
       sendAt("AT+CMGF=1", "OK", 3000);
     }
-    // 字符集：纯 ASCII 用 GSM，含中文用 UCS2
-    bool needUcs2 = hasNonAscii(content);
-    sendAt(needUcs2 ? "AT+CSCS=\"UCS2\"" : "AT+CSCS=\"GSM\"", "OK", 2000);
   }
 
-  const bool sendAsUcs2 = hasNonAscii(content);
+  // ---- 1.6) 纯 ASCII 内容用 GSM 字符集 ----
+  {
+    sendAt("AT+CSCS=\"GSM\"", "OK", 2000);
+  }
 
   // ---- 2) 发送 AT+CMGS="number" ----
   String cmd = "AT+CMGS=\"" + number + "\"";
@@ -912,14 +964,7 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
   }
 
   // ---- 4) 写入正文 + Ctrl-Z 提交 ----
-  if (sendAsUcs2) {
-    String hex = utf8ToUcs2(content);
-    LOGI("[SLOT%d] send UCS2 (%u chars): %s", slotIndex_,
-         (unsigned)(hex.length() / 4), hex.c_str());
-    serial_->print(hex);
-  } else {
-    serial_->print(content);
-  }
+  serial_->print(content);
   serial_->write(0x1A);
   serial_->flush();
 
@@ -958,5 +1003,126 @@ bool Modem::sendSms(const String& number, const String& content, String* error) 
   }
   if (!ok && error) *error = "send timeout";
   if (ok) LOGI("[SLOT%d] SMS sent -> %s", slotIndex_, number.c_str());
+  return ok;
+}
+
+// ---------------------------------------------------------------------------
+// PDU 模式发送（中文短信专用）
+//   AT+CMGF=0  ->  AT+CMGS=<tpdu_len>  ->  <pdu_hex><Ctrl-Z>  ->  +CMGS: <mr> OK
+// ---------------------------------------------------------------------------
+bool Modem::sendSmsPdu(const String& number, const String& content, String* error) {
+  // 1) 切到 PDU 模式
+  if (!sendAt("AT+CMGF=0", "OK", 3000)) {
+    if (error) *error = "cannot switch to PDU mode";
+    LOGE("[SLOT%d] CMGF=0 failed", slotIndex_);
+    return false;
+  }
+
+  // 2) 构造 PDU
+  String ucs2 = utf8ToUcs2(content);
+  String pdu = buildSmsPdu(number, ucs2);
+  if (pdu.length() < 20) {
+    if (error) *error = "invalid pdu";
+    LOGE("[SLOT%d] pdu build failed (len=%u)", slotIndex_, (unsigned)pdu.length());
+    return false;
+  }
+
+  // TPDU 长度 = PDU 总字节数 - 1（减去 SMSC 长度那个字节）
+  int tpduLen = (int)(pdu.length() / 2) - 1;
+  LOGI("[SLOT%d] send PDU len=%d ucs2=%s", slotIndex_, tpduLen, ucs2.c_str());
+
+  // 3) 清缓冲，发 AT+CMGS=<len>
+  while (serial_->available()) serial_->read();
+  String cmd = "AT+CMGS=" + String(tpduLen);
+  serial_->println(cmd);
+
+  // 4) 等 '>' 提示符
+  bool gotPrompt = false;
+  bool gotError = false;
+  String errLine;
+  String acc;
+  uint32_t start = millis();
+
+  while (millis() - start < 8000) {
+    while (serial_->available()) {
+      char c = static_cast<char>(serial_->read());
+      if (c == '>') {
+        gotPrompt = true;
+        break;
+      }
+      if (c == '\n') {
+        String line = trimCrlf(acc);
+        acc = "";
+        if (line.isEmpty() || line == cmd) continue;
+        if (line == "ERROR" || line.startsWith("+CME ERROR") ||
+            line.startsWith("+CMS ERROR")) {
+          gotError = true;
+          errLine = line;
+          break;
+        }
+      } else if (c != '\r') {
+        if (acc.length() < MODEM_LINE_BUFFER) acc.concat(c);
+      }
+    }
+    if (gotPrompt || gotError) break;
+    delay(2);
+  }
+
+  if (gotError) {
+    if (error) *error = errLine;
+    LOGE("[SLOT%d] CMGS(PDU) rejected: %s", slotIndex_, errLine.c_str());
+    sendAt("AT+CMGF=1", "OK", 2000);  // 恢复文本模式
+    return false;
+  }
+  if (!gotPrompt) {
+    if (error) *error = "no prompt (pdu)";
+    LOGE("[SLOT%d] CMGS(PDU) no prompt", slotIndex_);
+    sendAt("AT+CMGF=1", "OK", 2000);
+    return false;
+  }
+
+  // 5) 发 PDU + Ctrl-Z
+  serial_->print(pdu);
+  serial_->write(0x1A);
+  serial_->flush();
+
+  // 6) 等 +CMGS: <mr> 与 OK
+  acc = "";
+  start = millis();
+  bool ok = false;
+  String finalErr;
+
+  while (millis() - start < 30000) {
+    while (serial_->available()) {
+      char c = static_cast<char>(serial_->read());
+      if (c == '\n') {
+        String line = trimCrlf(acc);
+        acc = "";
+        if (line.startsWith("+CMGS")) {
+          LOGI("[SLOT%d] PDU submitted %s", slotIndex_, line.c_str());
+        } else if (line == "OK") {
+          ok = true;
+        } else if (line == "ERROR" || line.startsWith("+CMS ERROR") ||
+                   line.startsWith("+CME ERROR")) {
+          finalErr = line;
+        }
+      } else if (c != '\r') {
+        if (acc.length() < MODEM_LINE_BUFFER) acc.concat(c);
+      }
+    }
+    if (ok || finalErr.length() > 0) break;
+    delay(5);
+  }
+
+  // 无论成败都恢复文本模式（收短信依赖 CMGF=1）
+  sendAt("AT+CMGF=1", "OK", 2000);
+
+  if (finalErr.length() > 0) {
+    if (error) *error = finalErr;
+    LOGE("[SLOT%d] PDU send failed %s", slotIndex_, finalErr.c_str());
+    return false;
+  }
+  if (!ok && error) *error = "pdu send timeout";
+  if (ok) LOGI("[SLOT%d] SMS(PDU/Chinese) sent -> %s", slotIndex_, number.c_str());
   return ok;
 }
