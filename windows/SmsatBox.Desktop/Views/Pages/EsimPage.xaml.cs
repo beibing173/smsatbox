@@ -85,7 +85,7 @@ public partial class EsimPage : UserControl
 
             await Web.ExecuteScriptAsync(script);
 
-            var url = SiteRoot(api.ServerUrl) + "/assets/esim.html";
+            var url = SiteRoot(api.ServerUrl) + "/assets/esim.html?embed=1";
             Web.Source = new Uri(url);
             Web.Visibility = Visibility.Visible;
             HintPanel.Visibility = Visibility.Collapsed;
