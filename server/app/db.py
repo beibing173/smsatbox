@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS devices (
     device_token     TEXT NOT NULL UNIQUE,
     device_name      TEXT NOT NULL DEFAULT '',
     hardware_model   TEXT NOT NULL DEFAULT 'ESP32-S3-N16R8',
-    firmware_version TEXT NOT NULL DEFAULT '1.0.2',
+    firmware_version TEXT NOT NULL DEFAULT '1.0.3',
     local_ip         TEXT NOT NULL DEFAULT '',
     wifi_rssi        INTEGER NOT NULL DEFAULT 0,
     net_mode         TEXT NOT NULL DEFAULT 'wifi',
@@ -212,6 +212,27 @@ CREATE TABLE IF NOT EXISTS esim_command (
 CREATE INDEX IF NOT EXISTS idx_euicc_device ON euicc(device_id);
 CREATE INDEX IF NOT EXISTS idx_euicc_profile_euicc ON euicc_profile(euicc_id);
 CREATE INDEX IF NOT EXISTS idx_esim_command_device ON esim_command(device_id, status);
+
+-- eSIM 写卡（RSP 远程配置）任务
+--   state: pending -> authenticating -> downloading -> installed | failed
+--   progress 存 JSON：{step, percent, log}
+CREATE TABLE IF NOT EXISTS esim_download_task (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id        INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    slot_index       INTEGER NOT NULL DEFAULT 1,
+    activation_code  TEXT    NOT NULL,
+    smdp_address     TEXT    NOT NULL DEFAULT '',
+    matching_id      TEXT    NOT NULL DEFAULT '',
+    confirmation_code TEXT   NOT NULL DEFAULT '',
+    state            TEXT    NOT NULL DEFAULT 'pending',
+    progress         TEXT    NOT NULL DEFAULT '',
+    error            TEXT    NOT NULL DEFAULT '',
+    created_by       INTEGER,
+    created_at       TEXT    NOT NULL,
+    updated_at       TEXT    NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_esim_download_device ON esim_download_task(device_id, state);
 """
 
 
