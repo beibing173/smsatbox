@@ -291,6 +291,16 @@ bool Euicc::transmit(int channel, const String& apduHex, String* respHex) {
     return false;
   }
 
+  // 诊断：把原始响应打出来（换行压成分隔符，截断 160 字符）
+  {
+    String raw = resp;
+    raw.replace("\r", "");
+    raw.replace("\n", "|");
+    raw.trim();
+    if (raw.length() > 160) raw = raw.substring(0, 160) + "...";
+    LOGI("[SLOT%d] CGLA raw: %s", slot_, raw.c_str());
+  }
+
   // +CGLA: <len>,"<response hex>"
   int p = resp.indexOf("+CGLA:");
   if (p < 0) {
@@ -301,17 +311,23 @@ bool Euicc::transmit(int channel, const String& apduHex, String* respHex) {
 
   int q1 = rest.indexOf('"');
   if (q1 < 0) {
-    setError("bad +CGLA format");
+    setError("bad +CGLA format (no quote)");
     return false;
   }
   int q2 = rest.indexOf('"', q1 + 1);
   if (q2 < 0) {
-    setError("bad +CGLA format");
-    return false;
+    // 有些模组最后一个引号可能被截断，退化为取到行尾
+    q2 = rest.length();
+    LOGW("[SLOT%d] CGLA: closing quote missing, use rest of line", slot_);
   }
 
   String hex = rest.substring(q1 + 1, q2);
   hex.trim();
+  // 去掉可能的空白/换行残留
+  hex.replace(" ", "");
+  hex.replace("\n", "");
+  hex.replace("|", "");
+
   if (!isHexString(hex)) {
     setError("non-hex APDU response");
     return false;
@@ -370,8 +386,11 @@ bool Euicc::es10Exchange(int channel, const String& bodyHex, String* outHex) {
       collected += dataHex;
 
       if (sw1 == 0x61) {
-        // 还有数据：GET RESPONSE
-        uint8_t getResp[5] = {(uint8_t)(0x80 | channel), 0xC0, 0x00, 0x00, sw2};
+        // ISO 7816：SW1=0x61 表示「还有数据」，SW2 是剩余字节数。
+        // 特例：SW2=0 按标准解释为 256 字节（不是 0！）。
+        // GET RESPONSE 的 CLA 用通道号本身（不带 0x80），与 lpac 参考实现一致。
+        uint8_t le = sw2;
+        uint8_t getResp[5] = {(uint8_t)channel, 0xC0, 0x00, 0x00, le};
         apduHex = bytesToHex(getResp, sizeof(getResp));
         continue;
       }
