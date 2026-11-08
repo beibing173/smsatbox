@@ -66,7 +66,7 @@ class EsimFragment : androidx.fragment.app.Fragment() {
             return
         }
 
-        val url = "$server/assets/esim.html"
+        val url = "$server/assets/esim.html?embed=1"
         val token = Prefs.token
         val user = JSONObject().apply {
             put("username", Prefs.userName)
