@@ -162,6 +162,56 @@ CREATE TABLE IF NOT EXISTS app_settings (
     value      TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+-- ---------------------------------------------------------------------------
+-- eUICC / eSIM（可编程实体卡）管理
+--   euicc        : 每张 eUICC 卡一条，挂在设备上（一个设备每个卡槽最多一张）
+--   euicc_profile: 卡里已安装的 profile（可多个，同时只有 1 个启用）
+--   esim_command : 云端下发给设备的 eSIM 操作指令（切卡/删卡/改名/刷新）
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS euicc (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id         INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    slot_index        INTEGER NOT NULL DEFAULT 1,
+    eid               TEXT    NOT NULL DEFAULT '',
+    installed_apps    INTEGER NOT NULL DEFAULT 0,
+    free_nonvolatile  INTEGER NOT NULL DEFAULT -1,
+    free_volatile     INTEGER NOT NULL DEFAULT -1,
+    user_enabled      INTEGER NOT NULL DEFAULT 1,
+    probed_at         TEXT,
+    updated_at        TEXT    NOT NULL,
+    UNIQUE (device_id, slot_index)
+);
+
+CREATE TABLE IF NOT EXISTS euicc_profile (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    euicc_id    INTEGER NOT NULL REFERENCES euicc(id) ON DELETE CASCADE,
+    iccid       TEXT    NOT NULL DEFAULT '',
+    state       INTEGER NOT NULL DEFAULT 0,
+    nickname    TEXT    NOT NULL DEFAULT '',
+    provider    TEXT    NOT NULL DEFAULT '',
+    profile_name TEXT   NOT NULL DEFAULT '',
+    updated_at  TEXT    NOT NULL,
+    UNIQUE (euicc_id, iccid)
+);
+
+CREATE TABLE IF NOT EXISTS esim_command (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    device_id    INTEGER NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+    slot_index   INTEGER NOT NULL DEFAULT 1,
+    command_type TEXT    NOT NULL,
+    iccid        TEXT    NOT NULL DEFAULT '',
+    nickname     TEXT    NOT NULL DEFAULT '',
+    status       TEXT    NOT NULL DEFAULT 'pending',
+    error        TEXT    NOT NULL DEFAULT '',
+    created_by   INTEGER,
+    created_at   TEXT    NOT NULL,
+    finished_at  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_euicc_device ON euicc(device_id);
+CREATE INDEX IF NOT EXISTS idx_euicc_profile_euicc ON euicc_profile(euicc_id);
+CREATE INDEX IF NOT EXISTS idx_esim_command_device ON esim_command(device_id, status);
 """
 
 
