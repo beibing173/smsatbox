@@ -27,4 +27,8 @@
 
     <color name="nav_unselected">#64748B</color>
     <color name="nav_selected">#22D3EE</color>
+    <!-- 悬空导航 Dock：液态玻璃 -->
+    <color name="nav_glass">#F01A2438</color>
+    <color name="nav_glass_stroke">#1FFFFFFF</color>
+    <color name="nav_indicator">#2E22D3EE</color>
 </resources>
