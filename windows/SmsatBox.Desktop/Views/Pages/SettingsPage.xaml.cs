@@ -360,4 +360,13 @@ public partial class SettingsPage : UserControl
         App.SaveConfig();
         App.RestartPolling();
     }
+
+    /// <summary>跳转到 eSIM 工作台（内嵌在设置页入口里）</summary>
+    private void OnEsimEntryClick(object sender, RoutedEventArgs e)
+    {
+        if (Window.GetWindow(this) is MainWindow win)
+        {
+            win.ShowEsimPage();
+        }
+    }
 }
