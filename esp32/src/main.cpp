@@ -18,6 +18,7 @@
 #include "cloud.h"
 #include "config.h"
 #include "config_store.h"
+#include "euicc.h"
 #include "lanweb.h"
 #include "logger.h"
 #include "modem.h"
@@ -33,14 +34,67 @@ static Modem s_modem1(1, MODEM1_UART_NUM, MODEM1_TX_PIN, MODEM1_RX_PIN,
 static Modem s_modem2(2, MODEM2_UART_NUM, MODEM2_TX_PIN, MODEM2_RX_PIN,
                       MODEM2_EN_PIN, MODEM2_RST_PIN);
 
+// eUICC / eSIM 适配（每个卡槽一个实例）
+static Euicc s_euicc1;
+static Euicc s_euicc2;
+
 static uint32_t s_lastPollMs = 0;
 static uint32_t s_lastOtaPollMs = 0;
 static uint32_t s_lastModemProbeMs = 0;
+static uint32_t s_lastEsimPollMs = 0;
+static uint32_t s_lastEuiccRefreshMs = 0;
 static uint32_t s_bootMs = 0;
 static bool s_lanWebStarted = false;
+static bool s_euiccProbed = false;
 
 // modem.cpp 中的注册函数
 extern void registerModem(Modem* m);
+
+// ---------------------------------------------------------------------------
+// eUICC 探测与状态上报
+// ---------------------------------------------------------------------------
+static Euicc* euiccForSlot(int slotIndex) {
+  if (slotIndex == 1) return &s_euicc1;
+  if (slotIndex == 2) return &s_euicc2;
+  return nullptr;
+}
+
+/**
+ * 开机后探测两个卡槽是否为 eUICC 卡。
+ * 只探测一次（换卡需重启，符合实际使用习惯），避免频繁占用串口。
+ */
+static void probeEuiccOnce() {
+  if (s_euiccProbed) return;
+
+  s_euicc1.bindSlot(1);
+  s_euicc2.bindSlot(2);
+
+  bool allProbed = true;
+  for (int i = 1; i <= MODEM_COUNT; i++) {
+    Modem* m = modemForSlot(i);
+    Euicc* e = euiccForSlot(i);
+    if (m == nullptr || e == nullptr) continue;
+    if (!m->isReady()) {
+      allProbed = false;   // 还有模组没就绪，下次再试
+      continue;
+    }
+    e->probe(false);
+  }
+
+  if (allProbed) {
+    s_euiccProbed = true;
+    LOGI("eUICC probe done: slot1=%s slot2=%s",
+         s_euicc1.isEuicc() ? "yes" : "no", s_euicc2.isEuicc() ? "yes" : "no");
+    // 探测完成后立即上报一次
+    for (int i = 1; i <= MODEM_COUNT; i++) {
+      Euicc* e = euiccForSlot(i);
+      if (e != nullptr && e->isEuicc()) {
+        e->refresh();
+        cloud::reportEuicc(i, e);
+      }
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // 回调：收到短信
@@ -195,6 +249,109 @@ static void pollOta() {
 }
 
 // ---------------------------------------------------------------------------
+// eSIM：执行一条 eSIM 指令
+// ---------------------------------------------------------------------------
+static void executeEsimCommand(const CloudCommand& cmd) {
+  Euicc* e = euiccForSlot(cmd.slotIndex);
+  if (e == nullptr) {
+    cloud::reportEsimResult(cmd.commandId, false, "slot not found");
+    return;
+  }
+  if (!e->isEuicc()) {
+    cloud::reportEsimResult(cmd.commandId, false, "not an eUICC card");
+    return;
+  }
+  if (!e->userEnabled()) {
+    cloud::reportEsimResult(cmd.commandId, false, "eSIM 管理已被用户关闭");
+    return;
+  }
+
+  const char* opName = "?";
+  bool ok = false;
+  String err;
+
+  switch (cmd.esimOp) {
+    case ESIM_OP_REFRESH:
+      opName = "refresh";
+      ok = e->refresh();
+      if (!ok) err = e->lastError();
+      break;
+
+    case ESIM_OP_ENABLE:
+      opName = "enable";
+      ok = e->enableProfile(cmd.esimIccid);
+      if (!ok) err = e->lastError();
+      break;
+
+    case ESIM_OP_DISABLE:
+      opName = "disable";
+      ok = e->disableProfile(cmd.esimIccid);
+      if (!ok) err = e->lastError();
+      break;
+
+    case ESIM_OP_DELETE:
+      opName = "delete";
+      ok = e->deleteProfile(cmd.esimIccid);
+      if (!ok) err = e->lastError();
+      break;
+
+    case ESIM_OP_NICKNAME:
+      opName = "nickname";
+      ok = e->setNickname(cmd.esimIccid, cmd.esimNickname);
+      if (!ok) err = e->lastError();
+      break;
+
+    default:
+      cloud::reportEsimResult(cmd.commandId, false, "unknown eSIM operation");
+      return;
+  }
+
+  LOGI("esim cmd #%d %s -> %s", cmd.commandId, opName, ok ? "ok" : err.c_str());
+  cloud::reportEsimResult(cmd.commandId, ok, ok ? "" : err);
+
+  // 操作完刷新一次缓存并上报（切卡/删卡后 profile 列表会变）
+  if (ok && cmd.esimOp != ESIM_OP_NICKNAME) {
+    delay(1500);  // 给卡片一点时间处理 REFRESH
+    e->refresh();
+  }
+  cloud::reportEuicc(cmd.slotIndex, e);
+}
+
+// ---------------------------------------------------------------------------
+// 轮询 eSIM 指令
+// ---------------------------------------------------------------------------
+static void pollEsim() {
+  // eUICC 功能必须真实可用才轮询，避免空转
+  bool anyAvailable = false;
+  for (int i = 1; i <= MODEM_COUNT; i++) {
+    Euicc* e = euiccForSlot(i);
+    if (e != nullptr && e->available()) {
+      anyAvailable = true;
+      break;
+    }
+  }
+  if (!anyAvailable) return;
+
+  CloudCommand cmd;
+  if (!cloud::pollEsimCommand(&cmd)) return;
+  executeEsimCommand(cmd);
+}
+
+// ---------------------------------------------------------------------------
+// 定期刷新并上报 eUICC 状态（每 5 分钟）
+// ---------------------------------------------------------------------------
+static void refreshEuiccStatus() {
+  for (int i = 1; i <= MODEM_COUNT; i++) {
+    Euicc* e = euiccForSlot(i);
+    if (e == nullptr) continue;
+    if (!e->isEuicc()) continue;
+    if (!e->userEnabled()) continue;
+    e->refresh();
+    cloud::reportEuicc(i, e);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 状态指示灯
 // ---------------------------------------------------------------------------
 static void updateLed() {
@@ -239,6 +396,11 @@ void setup() {
   registerModem(&s_modem2);
   Modem::setSmsCallback(onSms);
   Modem::setCallCallback(onCall);
+
+  // eUICC 实例绑定卡槽（真正探测在 loop 中等模组就绪后执行）
+  s_euicc1.bindSlot(1);
+  s_euicc2.bindSlot(2);
+
   s_modem1.begin();
   s_modem2.begin();
 
@@ -306,9 +468,23 @@ void loop() {
     s_lastModemProbeMs = now;
     s_modem1.refreshAll();
     s_modem2.refreshAll();
+    // 模组就绪后探测一次 eUICC（只探一次，换卡需重启）
+    probeEuiccOnce();
   }
 
-  // 8) 指示灯
+  // 8) eSIM 指令轮询（15 秒一次，比短信指令稍慢：切卡是低频重操作）
+  if (now - s_lastEsimPollMs > 15000UL) {
+    s_lastEsimPollMs = now;
+    pollEsim();
+  }
+
+  // 9) 定期刷新并上报 eUICC 状态（5 分钟）
+  if (now - s_lastEuiccRefreshMs > 300000UL) {
+    s_lastEuiccRefreshMs = now;
+    refreshEuiccStatus();
+  }
+
+  // 10) 指示灯
   updateLed();
 
   delay(2);
