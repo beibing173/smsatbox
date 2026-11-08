@@ -26,6 +26,27 @@ public partial class EsimPage : UserControl
         Unloaded += OnUnloaded;
     }
 
+    /// <summary>
+    /// 从 API base 推导站点根地址。
+    ///
+    /// ApiClient.ServerUrl 形如 http://host:8000/api/v1（NormalizeBase 保证），
+    /// 但静态页面 esim.html 挂在站点根下（/assets/esim.html）。
+    /// 直接拼会变成 /api/v1/assets/esim.html → 404。
+    /// </summary>
+    private static string SiteRoot(string serverUrl)
+    {
+        var s = (serverUrl ?? "").Trim().TrimEnd('/');
+        foreach (var suffix in new[] { "/api/v1", "/api" })
+        {
+            if (s.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+            {
+                s = s.Substring(0, s.Length - suffix.Length).TrimEnd('/');
+                break;
+            }
+        }
+        return s;
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         SubtitleText.Text = "可编程 eUICC 卡（小白卡 / 9eSIM / 5ber）的配置管理";
@@ -64,7 +85,7 @@ public partial class EsimPage : UserControl
 
             await Web.ExecuteScriptAsync(script);
 
-            var url = api.ServerUrl.TrimEnd('/') + "/assets/esim.html";
+            var url = SiteRoot(api.ServerUrl) + "/assets/esim.html";
             Web.Source = new Uri(url);
             Web.Visibility = Visibility.Visible;
             HintPanel.Visibility = Visibility.Collapsed;
@@ -106,7 +127,7 @@ public partial class EsimPage : UserControl
             ShowHint("尚未连接服务器。");
             return;
         }
-        var url = api.ServerUrl.TrimEnd('/') + "/assets/esim.html";
+        var url = SiteRoot(api.ServerUrl) + "/assets/esim.html";
         try
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
