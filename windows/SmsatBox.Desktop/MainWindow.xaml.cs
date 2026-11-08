@@ -74,15 +74,18 @@ public partial class MainWindow : Window
     }
 
     /// <summary>外部（托盘菜单）跳转到指定页。</summary>
+    /// <summary>直接从设置页跳到 eSIM 工作台（不在左侧导航里）</summary>
+    public void ShowEsimPage()
+    {
+        ShowPage("esim");
+    }
+
     public void NavigateTo(string tag)
     {
         switch (tag)
         {
             case "devices":
                 NavDevices.IsChecked = true;
-                break;
-            case "esim":
-                NavEsim.IsChecked = true;
                 break;
             case "settings":
                 NavSettings.IsChecked = true;
